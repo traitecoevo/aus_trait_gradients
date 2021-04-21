@@ -17,7 +17,7 @@ editor_options:
 ---
 
 Load data
-```{r}
+```{r, warning=FALSE, message=FALSE}
 # Install dependencies as needed
 # devtools::install_deps()
 
@@ -49,7 +49,8 @@ trait_names <- c("leaf_width","leaf_delta13C","leaf_N_per_area","plant_height","
 traits <- 
   austraits$traits %>%
   filter(trait_name %in% trait_names) %>%
-  left_join(au_sites_clim) 
+  left_join(by = c("dataset_id", "site_name"), au_sites_clim) %>%
+  mutate_at("value", as.numeric)
 
 ####create a new trait dataframe to only include observations with associated latitude and longitude
 traits_georef <- 
@@ -116,3 +117,14 @@ hist(n_traits_site_summary$n_traits, xlab="Number of traits", ylab = "Sites", ma
 hist(n_traits_georef_site_summary$n_traits, xlab="Number of traits", ylab = "Sites", main = "Number of sites (georeferenced)")
 
 ```
+
+Basic patterns with environment 
+
+```{r}
+traits %>% ggplot(aes(Prec, value)) + geom_point() + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name)
+```
+
+```{r}
+traits %>% ggplot(aes(Temp, value)) + geom_point() + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name)
+```
+
