@@ -1,0 +1,64 @@
+---
+title: Report on data in AusTraits
+output:
+  html_document:
+    df_print: kable
+    highlight: tango
+    keep_md: no
+    smart: no
+    theme: yeti
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+editor_options:
+  chunk_output_type: console
+---
+
+Load data
+```{r}
+devtools::load_all()
+
+austraits <- readRDS("data/austraits_2.1.0.9000.rds")
+
+au_bioclim <- load_climate_data()
+
+# match with climate data
+au_sites_clim <-
+  austraits$sites %>%
+  filter(site_property %in% c("longitude (deg)", "latitude (deg)")) %>%
+  spread(site_property, value) %>%
+  rowid_to_column("ID") %>%
+  rename(latitude = `latitude (deg)`, longitude = `longitude (deg)`) %>%
+  combine_occurence_climate(au_bioclim) %>%
+  mutate_at(c("latitude", "longitude"), as.numeric)
+
+# add max height, N_area, delta13_c
+# Also do for some alternatives: e.g. leaf_width, leaf_area ?
+trait_names <- c("specific_leaf_area", "wood_density", "leaf_area", "seed_mass")
+
+traits <- 
+  austraits$traits %>%
+  filter(trait_name %in% trait_names) %>%
+  left_join(au_sites_clim) 
+
+traits_site_summary <- 
+  traits %>% 
+  group_by(dataset_id, trait_name, latitude, longitude, Temp, Prec) %>% 
+  summarise(nspp=n_distinct(taxon_name))
+
+```
+```{r}
+austraits_climate_space <-
+  plot_climate_space(traits, au_bioclim)
+
+austraits_site_by_trait <-
+  plot_site_map_by_trait(traits)
+
+png("figures/austraits_fig_biome_map.png",
+    height = 12,
+    width = 8, units="in", res=300)
+austraits_climate_space / austraits_site_by_trait
+dev.off()
+```

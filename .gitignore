@@ -1,0 +1,13 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+data/austraits.rds
+*.docx
+*.html
+figures/*
+wc10/*
+*.pdf
+ms.md
+ms.tex
+data/author_list_email.csv
