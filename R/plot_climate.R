@@ -105,7 +105,7 @@ plot_site_map_by_trait <- function(trait_df) {
       data = df,
       aes(y = latitude, x = longitude),
       inherit.aes = FALSE,
-      show.legend = TRUE,
+      show.legend = FALSE,
       adjust = 1,
       size = 0.5,
       alpha = 0.8
