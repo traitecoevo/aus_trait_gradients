@@ -51,6 +51,11 @@ traits <-
   filter(trait_name %in% trait_names) %>%
   left_join(au_sites_clim) 
 
+####create a new trait dataframe to only include observations with associated latitude and longitude
+traits_georef <- 
+  traits %>%
+  drop_na(latitude,longitude)
+
 traits_site_summary <- 
   traits %>% 
   group_by(dataset_id, trait_name, latitude, longitude, Temp, Prec) %>% 
@@ -63,7 +68,7 @@ Write some summaries about availability of data.....
 
 Plots:
 
-```{r, fig.height=12, fig.width=6}
+```{r eval=FALSE, fig.height=12, fig.width=6, include=FALSE}
 austraits_climate_space <-
   plot_climate_space(traits, au_bioclim)
 
@@ -82,8 +87,7 @@ number_observations_per_trait<-traits %>%
   group_by(trait_name) %>%
   summarise(n_total_obs=length(value), n_total_taxa=length(unique(taxon_name)))
 
-number_observations_per_trait_georeferenced<-traits %>%
-  drop_na(latitude,longitude) %>%
+number_observations_per_trait_georeferenced<-traits_georef %>%
   group_by(trait_name) %>%
   summarise(n_georef_obs=length(value), n_georef_taxa=length(unique(taxon_name))) %>%
   left_join(number_observations_per_trait)
@@ -93,5 +97,22 @@ number_observations_per_trait_georeferenced %>%
   relocate(n_total_taxa, .before=n_georef_taxa) %>%
   kbl(caption = "Table 1: n_total_obs: Total number of observations of a given trait, n_georef_obs: Number of observations of a given trait with georeference, n_total_taxa: Total number of taxa with at least one observation of a given trait, n_georef_taxa: Number of taxa with at least one georeferenced observation of a given trait") %>%
   kable_classic(full_width = T, html_font = "Cambria")  
+
+```
+
+How many traits out of the 8 focal traits were measured in each site?
+
+```{r}
+n_traits_site_summary<-traits_site_summary %>% 
+  group_by(dataset_id, latitude, longitude, Temp, Prec) %>% 
+  summarise(n_traits=n_distinct(trait_name))
+
+n_traits_georef_site_summary<-traits_georef %>% 
+  group_by(dataset_id, latitude, longitude, Temp, Prec) %>% 
+  summarise(n_traits=n_distinct(trait_name))
+
+
+hist(n_traits_site_summary$n_traits, xlab="Number of traits", ylab = "Sites", main = "Number of sites (total)")
+hist(n_traits_georef_site_summary$n_traits, xlab="Number of traits", ylab = "Sites", main = "Number of sites (georeferenced)")
 
 ```
