@@ -44,7 +44,7 @@ Select subset of traits:
 ```{r}
 # add max height, N_area, delta13_c
 # Also do for some alternatives: e.g. leaf_width, leaf_area ?
-trait_names <- c("specific_leaf_area", "wood_density", "leaf_area", "seed_mass")
+trait_names <- c("leaf_width","leaf_delta13C","leaf_N_per_area","plant_height","specific_leaf_area", "wood_density", "leaf_area", "seed_mass")
 
 traits <- 
   austraits$traits %>%
@@ -63,7 +63,7 @@ Write some summaries about availability of data.....
 
 Plots:
 
-```{r}
+```{r, fig.height=12, fig.width=6}
 austraits_climate_space <-
   plot_climate_space(traits, au_bioclim)
 
@@ -73,3 +73,25 @@ austraits_site_by_trait <-
 austraits_climate_space / austraits_site_by_trait
 ```
 
+Shading of points (blue -> yellow) indicates the number of neighbouring points (e.g. there is substantial seed mass data in SE Australia)
+
+Compare the number of observations and taxa for each trait which are **georeferenced vs. not georeferenced**.
+
+```{r}
+number_observations_per_trait<-traits %>%
+  group_by(trait_name) %>%
+  summarise(n_total_obs=length(value), n_total_taxa=length(unique(taxon_name)))
+
+number_observations_per_trait_georeferenced<-traits %>%
+  drop_na(latitude,longitude) %>%
+  group_by(trait_name) %>%
+  summarise(n_georef_obs=length(value), n_georef_taxa=length(unique(taxon_name))) %>%
+  left_join(number_observations_per_trait) %>%
+  relocate(n_total_obs, .after=trait_name) %>%
+  relocate(n_total_taxa, .before=n_georef_taxa)
+
+number_observations_per_trait_georeferenced %>%
+  kbl(caption = "Note that taxa which have georeferenced and non-georeferenced values for a given trait will appear under n_georef_taxa") %>%
+  kable_classic(full_width = T, html_font = "Cambria")  
+
+```
