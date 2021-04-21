@@ -18,8 +18,13 @@ editor_options:
 
 Load data
 ```{r}
+# Install dependencies as needed
+#devtools::install_deps()
+
+# Load packages and functions for this analysis
 devtools::load_all()
 
+# load data
 austraits <- readRDS("data/austraits_2.1.0.9000.rds")
 
 au_bioclim <- load_climate_data()
@@ -33,7 +38,10 @@ au_sites_clim <-
   rename(latitude = `latitude (deg)`, longitude = `longitude (deg)`) %>%
   combine_occurence_climate(au_bioclim) %>%
   mutate_at(c("latitude", "longitude"), as.numeric)
+```
 
+Select subset of traits:
+```{r}
 # add max height, N_area, delta13_c
 # Also do for some alternatives: e.g. leaf_width, leaf_area ?
 trait_names <- c("specific_leaf_area", "wood_density", "leaf_area", "seed_mass")
@@ -49,6 +57,12 @@ traits_site_summary <-
   summarise(nspp=n_distinct(taxon_name))
 
 ```
+
+Write some summaries about availability of data.....
+
+
+Plots:
+
 ```{r}
 austraits_climate_space <-
   plot_climate_space(traits, au_bioclim)
@@ -56,9 +70,6 @@ austraits_climate_space <-
 austraits_site_by_trait <-
   plot_site_map_by_trait(traits)
 
-png("figures/austraits_fig_biome_map.png",
-    height = 12,
-    width = 8, units="in", res=300)
 austraits_climate_space / austraits_site_by_trait
-dev.off()
 ```
+
