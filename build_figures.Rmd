@@ -19,7 +19,7 @@ editor_options:
 Load data
 ```{r}
 # Install dependencies as needed
-#devtools::install_deps()
+# devtools::install_deps()
 
 # Load packages and functions for this analysis
 devtools::load_all()
@@ -36,8 +36,8 @@ au_sites_clim <-
   spread(site_property, value) %>%
   rowid_to_column("ID") %>%
   rename(latitude = `latitude (deg)`, longitude = `longitude (deg)`) %>%
-  combine_occurence_climate(au_bioclim) %>%
-  mutate_at(c("latitude", "longitude"), as.numeric)
+  mutate_at(c("latitude", "longitude"), ~suppressWarnings(as.numeric(.x))) %>%
+  combine_occurence_climate(au_bioclim)
 ```
 
 Select subset of traits:

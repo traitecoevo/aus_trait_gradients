@@ -40,8 +40,6 @@ extract_climate_data <- function(df, climstack) {
   # climstack is a stack of gridded climate data
 
   df %>%
-    # filter(plot_coord_avail==1)%>%
-    mutate(lat = as.numeric(lat), lon = as.numeric(lon)) %>%
     ungroup() %>%
     dplyr::select(lat, lon) %>%
     na.omit() -> coord
