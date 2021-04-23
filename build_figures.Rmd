@@ -124,7 +124,7 @@ Basic patterns with environment
 traits %>%
   #multiply leaf_delta13C by -1 to put it on the positive scale for log transformation
   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
-    ggplot(aes(Prec, value)) + geom_point() + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+    ggplot(aes(Prec, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
 ```
 
 ```{r}
@@ -132,5 +132,12 @@ traits %>%
   #multiply leaf_delta13C by -1 to put it on the positive scale for log transformation
   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
   ggplot(aes(Temp, value)) + geom_point() + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+```
+
+
+We better filter to woody species!!!
+
+```{r}
+austraits$traits %>% filter(trait_name == "plant_growth_form", taxon_name %in% traits$taxon_name) %>% pull(value) %>% table()
 ```
 
