@@ -39,16 +39,71 @@ au_sites_clim <-
   mutate_at(c("latitude", "longitude"), ~suppressWarnings(as.numeric(.x))) %>%
   combine_occurence_climate(au_bioclim)
 ```
+Calculate leaf_N_per_area and leaf_area for additional observations:
+```{r}
+#two current problems, in summarise argument, `first` should be `mean` but breaking on instances with a single observation (almost all). Second, this code means the newly calculated values don't have value_type and replicate linked to them
+austraits$traits %>% 
+  filter(trait_name %in% c("leaf_area","leaf_dry_mass","specific_leaf_area","leaf_N_per_dry_mass",
+                           "leaf_N_per_area")) %>%
+  select(trait_name, value, observation_id, taxon_name,dataset_id,site_name, context_name, date) %>%
+  group_by(trait_name, observation_id, taxon_name, dataset_id, site_name, context_name, date) %>%
+  summarise(value = first(value)) %>%
+  ungroup() %>%
+  spread(key = trait_name, value = value) %>% 
+  mutate(specific_leaf_area = as.numeric(specific_leaf_area),
+         leaf_N_per_dry_mass = as.numeric(leaf_N_per_dry_mass),
+         leaf_area = as.numeric(leaf_area),
+         leaf_dry_mass = as.numeric(leaf_dry_mass),
+         leaf_N_per_area = as.numeric(leaf_N_per_area)) %>%
+  mutate(leaf_N_calc_SLA = leaf_N_per_dry_mass / specific_leaf_area,
+         leaf_N_calc_LA = leaf_N_per_dry_mass*leaf_dry_mass/leaf_area,
+         leaf_N_per_area_combined = ifelse(!is.na(leaf_N_per_area),leaf_N_per_area,leaf_N_calc_SLA),
+         leaf_N_per_area_combined = ifelse(!is.na(leaf_N_per_area_combined),leaf_N_per_area_combined,leaf_N_calc_LA),
+         specific_leaf_area_combined = ifelse(!is.na(specific_leaf_area),specific_leaf_area,leaf_area/leaf_dry_mass),
+         leaf_area_combined = ifelse(!is.na(leaf_area),leaf_area,specific_leaf_area*leaf_dry_mass)) -> calculated_data
+
+calculated_data %>%
+  select(observation_id, taxon_name, dataset_id, site_name, context_name, date, 
+         leaf_N_per_area_combined) %>%
+  filter(!is.na(leaf_N_per_area_combined)) %>%
+  mutate(units = "g/m2",
+         trait_name = "leaf_N_per_area_calc",
+         value = as.character(leaf_N_per_area_combined)) %>%
+  select(-leaf_N_per_area_combined) -> leaf_N_per_area_calcuated
+
+calculated_data %>%
+  select(observation_id, taxon_name, dataset_id, site_name, context_name, date, 
+         leaf_area_combined) %>%
+  filter(!is.na(leaf_area_combined)) %>%
+  mutate(units = "mm2",
+         trait_name = "leaf_area_calc",
+         value = as.character(leaf_area_combined)) %>%
+  select(-leaf_area_combined) -> leaf_area_calcuated
+
+calculated_data %>%
+  select(observation_id, taxon_name, dataset_id, site_name, context_name, date, 
+         specific_leaf_area_combined) %>%
+  filter(!is.na(specific_leaf_area_combined)) %>%
+  mutate(units = "mm2/mg",
+         trait_name = "specific_leaf_area_calc",
+         value = as.character(specific_leaf_area_combined)) %>%
+  select(-specific_leaf_area_combined) -> specific_leaf_area_calcuated
+```
 
 Select subset of traits:
 ```{r}
 # add max height, N_area, delta13_c
 # Also do for some alternatives: e.g. leaf_width, leaf_area ?
-trait_names <- c("leaf_width","leaf_delta13C","leaf_N_per_area","plant_height","specific_leaf_area", "wood_density", "leaf_area", "seed_mass")
+trait_names_short <- c("leaf_width","leaf_delta13C","plant_height","leaf_N_per_area","specific_leaf_area","leaf_area", "wood_density", "seed_mass", "plant_growth_form")
+trait_names <- c("leaf_N_per_area","leaf_N_per_area_calc","specific_leaf_area","specific_leaf_area_calc","leaf_area","leaf_area_calc","leaf_width","leaf_delta13C","wood_density","seed_mass","plant_height", "plant_growth_form")
+
 
 traits <- 
   austraits$traits %>%
-  filter(trait_name %in% trait_names) %>%
+  filter(trait_name %in% trait_names_short) %>% 
+  bind_rows(leaf_N_per_area_calcuated) %>%
+  bind_rows(specific_leaf_area_calcuated) %>%
+  bind_rows(leaf_area_calcuated) %>%
   left_join(by = c("dataset_id", "site_name"), au_sites_clim) %>%
   mutate_at("value", as.numeric)
 
