@@ -97,19 +97,69 @@ Select subset of traits:
 trait_names_short <- c("leaf_width","leaf_delta13C","plant_height","leaf_N_per_area","specific_leaf_area","leaf_area", "wood_density", "seed_mass", "plant_growth_form")
 trait_names <- c("leaf_N_per_area","leaf_N_per_area_calc","specific_leaf_area","specific_leaf_area_calc","leaf_area","leaf_area_calc","leaf_width","leaf_delta13C","wood_density","seed_mass","plant_height", "plant_growth_form")
 
-
 traits <- 
   austraits$traits %>%
   filter(trait_name %in% trait_names_short) %>% 
   bind_rows(leaf_N_per_area_calcuated) %>%
   bind_rows(specific_leaf_area_calcuated) %>%
   bind_rows(leaf_area_calcuated) %>%
-  left_join(by = c("dataset_id", "site_name"), au_sites_clim) %>%
+  left_join(by = c("dataset_id", "site_name"), au_sites_clim)
+```
+
+Inspect data availability across growth forms (woody vs. non-woody)
+
+```{r}
+plant_growth_form_index <- 
+  traits %>%
+  filter(trait_name == "plant_growth_form") %>%
+  rename("plant_growth_form" = "value") %>%
+  mutate(plant_form_broad = ifelse(plant_growth_form %in% c("grass-tree","herb shrub","herb subshrub","herb_large shrub","prostate_shrub","shrub subshrub","shrub tree","shrub treelet","subshrub","shrub","treelet","tree","tree tree"), "woody", "non_woody")) 
+
+# how many species for which growth form was recorded have both woody and non-woody forms
+number_of_forms_species <- plant_growth_form_index %>% 
+  group_by(taxon_name) %>%
+  summarise(length(unique(plant_form_broad))) %>%
+  rename(number_of_forms = 2)
+
+# join number of growth forms to plant_growth_form_index
+plant_growth_form_index <- plant_growth_form_index %>%
+  left_join(number_of_forms_species) %>%
+  select("taxon_name", "plant_form_broad", "plant_growth_form", "number_of_forms") %>%
+  group_by(taxon_name) %>%
+  slice(1)
+
+traits <- traits %>%
+  filter(!trait_name=="plant_growth_form") %>%
   mutate_at("value", as.numeric)
 
-#create a new trait dataframe to only include observations with associated latitude and longitude
+# reintroduce plant_growth_form index to trait dataframe
+traits <- traits %>%
+  left_join(plant_growth_form_index) 
+
+# how are samples distributed across species with 1, 2 or no recorded broad growth form (i.e. woody or non-woody)
+table(traits$number_of_forms, useNA = "ifany")
+```
+
+54600 trait samples belong to taxa which have been recorded to have  both woody and non-woody growth forms; 5555 trait samples belong to taxa which have not yet had a growth form recorded. Note that growth form is often not available for all trait observations of a given taxa. Will need to address how species with woody and non-woody forms should be addressed.
+
+Create trait data frame for woody taxa only
+
+```{r}
+woody_traits <- traits %>%
+# remove species which had two forms - will keep ones that had no growth form identified (i.e. NAs)
+  filter(is.na(number_of_forms) | number_of_forms == 1 )  %>%
+# finally, remove species which were exclusively non-woody
+  filter(is.na(plant_form_broad) | plant_form_broad == "woody")
+```
+
+Create a new trait dataframe to only include observations with associated latitude and longitude
+```{r}
 traits_georef <- 
   traits %>%
+  drop_na(latitude,longitude)
+
+woody_traits_georef <- 
+  woody_traits %>%
   drop_na(latitude,longitude)
 
 traits_site_summary <- 
@@ -117,6 +167,10 @@ traits_site_summary <-
   group_by(dataset_id, trait_name, latitude, longitude, Temp, Prec) %>% 
   summarise(nspp=n_distinct(taxon_name))
 
+woody_traits_site_summary <- 
+  traits %>% 
+  group_by(dataset_id, trait_name, latitude, longitude, Temp, Prec) %>% 
+  summarise(nspp=n_distinct(taxon_name))
 ```
 
 Write some summaries about availability of data.....
@@ -124,19 +178,33 @@ Write some summaries about availability of data.....
 
 Plots:
 
-```{r eval=FALSE, fig.height=12, fig.width=6}
+Austraits sites across biomes - total dataset vs. woody only dataset
+
+```{r fig.height=12, fig.width=6}
 austraits_climate_space <-
   plot_climate_space(traits, au_bioclim)
 
+austraits_climate_space_woody <-
+  plot_climate_space(woody_traits, au_bioclim)
+
+austraits_climate_space / austraits_climate_space_woody
+```
+
+Woody trait dataset
+
+```{r fig.height=12, fig.width=6}
 austraits_site_by_trait <-
   plot_site_map_by_trait(traits)
 
-austraits_climate_space / austraits_site_by_trait
+austraits_site_by_trait_woody <-
+  plot_site_map_by_trait(woody_traits)
+
+austraits_site_by_trait / austraits_site_by_trait_woody
 ```
 
 Shading of points (blue -> yellow) indicates the number of neighbouring points (e.g. there is substantial seed mass data in SE Australia)
 
-Compare the number of observations and taxa for each trait which are **georeferenced vs. not georeferenced**.
+Compare the number of observations and taxa in the **total dataset** for each trait which are **georeferenced vs. not georeferenced**.
 
 ```{r}
 number_observations_per_trait<-traits %>%
@@ -151,7 +219,27 @@ number_observations_per_trait_georeferenced<-traits_georef %>%
 number_observations_per_trait_georeferenced %>% 
   relocate(n_total_obs, .after=trait_name) %>%
   relocate(n_total_taxa, .before=n_georef_taxa) %>%
-  kbl(caption = "Table 1: n_total_obs: Total number of observations of a given trait, n_georef_obs: Number of observations of a given trait with georeference, n_total_taxa: Total number of taxa with at least one observation of a given trait, n_georef_taxa: Number of taxa with at least one georeferenced observation of a given trait") %>%
+  kbl(caption = "Table 1: Total trait dataset. n_total_obs: Total number of observations of a given trait, n_georef_obs: Number of observations of a given trait with georeference, n_total_taxa: Total number of taxa with at least one observation of a given trait, n_georef_taxa: Number of taxa with at least one georeferenced observation of a given trait") %>%
+  kable_classic(full_width = T, html_font = "Cambria")  
+
+```
+
+Compare the number of observations and taxa in the **woody dataset** for each trait which are **georeferenced vs. not georeferenced**.
+
+```{r}
+number_observations_per_trait<-woody_traits %>%
+  group_by(trait_name) %>%
+  summarise(n_total_obs=length(value), n_total_taxa=length(unique(taxon_name)))
+
+number_observations_per_trait_georeferenced<-woody_traits_georef %>%
+  group_by(trait_name) %>%
+  summarise(n_georef_obs=length(value), n_georef_taxa=length(unique(taxon_name))) %>%
+  left_join(number_observations_per_trait)
+
+number_observations_per_trait_georeferenced %>% 
+  relocate(n_total_obs, .after=trait_name) %>%
+  relocate(n_total_taxa, .before=n_georef_taxa) %>%
+  kbl(caption = "Table 2: Woody trait dataset. n_total_obs: Total number of observations of a given trait, n_georef_obs: Number of observations of a given trait with georeference, n_total_taxa: Total number of taxa with at least one observation of a given trait, n_georef_taxa: Number of taxa with at least one georeferenced observation of a given trait") %>%
   kable_classic(full_width = T, html_font = "Cambria")  
 
 ```
@@ -167,9 +255,20 @@ n_traits_georef_site_summary<-traits_georef %>%
   group_by(dataset_id, latitude, longitude, Temp, Prec) %>% 
   summarise(n_traits=n_distinct(trait_name))
 
+n_woody_traits_site_summary<-woody_traits_site_summary %>% 
+  group_by(dataset_id, latitude, longitude, Temp, Prec) %>% 
+  summarise(n_traits=n_distinct(trait_name))
+
+n_woody_traits_georef_site_summary<-woody_traits_georef %>% 
+  group_by(dataset_id, latitude, longitude, Temp, Prec) %>% 
+  summarise(n_traits=n_distinct(trait_name))
+
 
 hist(n_traits_site_summary$n_traits, xlab="Number of traits", ylab = "Sites", main = "Number of sites (total)")
 hist(n_traits_georef_site_summary$n_traits, xlab="Number of traits", ylab = "Sites", main = "Number of sites (georeferenced)")
+
+hist(n_woody_traits_site_summary$n_traits, xlab="Number of traits", ylab = "Sites (woody taxa only)", main = "Number of sites (total)")
+hist(n_woody_traits_georef_site_summary$n_traits, xlab="Number of traits", ylab = "Sites (woody taxa only)", main = "Number of sites (georeferenced)")
 
 ```
 
@@ -177,16 +276,16 @@ Basic patterns with environment
 
 ```{r}
 traits %>%
-  #multiply leaf_delta13C by -1 to put it on the positive scale for log transformation
+  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
     ggplot(aes(Prec, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
 ```
 
 ```{r}
 traits %>%
-  #multiply leaf_delta13C by -1 to put it on the positive scale for log transformation
+  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
-  ggplot(aes(Temp, value)) + geom_point() + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+  ggplot(aes(Temp, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
 ```
 
 
@@ -195,4 +294,3 @@ We better filter to woody species!!!
 ```{r}
 austraits$traits %>% filter(trait_name == "plant_growth_form", taxon_name %in% traits$taxon_name) %>% pull(value) %>% table()
 ```
-
