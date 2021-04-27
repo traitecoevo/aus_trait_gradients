@@ -289,8 +289,11 @@ traits %>%
 ```
 
 
-We better filter to woody species!!!
+Isaac - looking to do pair-wise relationships for common trait-pairs
 
 ```{r}
-austraits$traits %>% filter(trait_name == "plant_growth_form", taxon_name %in% traits$taxon_name) %>% pull(value) %>% table()
-```
+# pivot trait dataframe to give traits across species from each site
+woody_traits_spread<-pivot_wider(woody_traits, id_cols=c(taxon_name,observation_id), names_from=trait_name, values_from=value, values_fill=NA)
+
+
+
