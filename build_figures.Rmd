@@ -164,12 +164,12 @@ woody_traits_georef <-
 
 traits_site_summary <- 
   traits %>% 
-  group_by(dataset_id, trait_name, latitude, longitude, Temp, Prec) %>% 
+  group_by(dataset_id, trait_name, latitude, longitude, Temp, Prec, Prec_CV) %>% 
   summarise(nspp=n_distinct(taxon_name))
 
 woody_traits_site_summary <- 
   traits %>% 
-  group_by(dataset_id, trait_name, latitude, longitude, Temp, Prec) %>% 
+  group_by(dataset_id, trait_name, latitude, longitude, Temp, Prec, Prec_CV) %>% 
   summarise(nspp=n_distinct(taxon_name))
 ```
 
@@ -272,20 +272,50 @@ hist(n_woody_traits_georef_site_summary$n_traits, xlab="Number of traits", ylab 
 
 ```
 
-Basic patterns with environment 
+Basic patterns with environment - all data
 
-```{r}
+```{r, fig.width=10}
 traits %>%
+  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
+  mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+    ggplot(aes(Prec, value, colour=plant_form_broad)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+```
+
+```{r, fig.width=10}
+traits %>%
+  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
+  mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  ggplot(aes(Temp, value, colour=plant_form_broad)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+```
+
+```{r, fig.width=10}
+traits %>%
+  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
+  mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  ggplot(aes(Prec_CV, value, colour=plant_form_broad)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+```
+
+Basic patterns with environment - woody only
+
+```{r, fig.width=10}
+woody_traits %>%
   #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
     ggplot(aes(Prec, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
 ```
 
-```{r}
-traits %>%
+```{r, fig.width=10}
+woody_traits %>%
   #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
   ggplot(aes(Temp, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+```
+
+```{r, fig.width=10}
+woody_traits %>%
+  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
+  mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  ggplot(aes(Prec_CV, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
 ```
 
 
@@ -294,46 +324,72 @@ Isaac - looking to do pair-wise relationships for common trait-pairs
 ```{r}
 # pivot trait dataframe to give traits across species from each site
 woody_traits_georef_spread <- woody_traits_georef %>% 
-  select(observation_id,Temp, Prec, taxon_name, trait_name, value) %>% 
+  select(observation_id,Temp, Prec, Prec_CV, taxon_name, trait_name, value) %>% 
   pivot_wider(names_from = "trait_name", values_from = "value")%>%
   unnest(trait_names[-12]) %>%
-  mutate(Temperature_binary = ifelse(Temp > median(Temp, na.rm=T), "Above 17.5 C", "Below 17.5 C"))%>%
-  mutate(Precipitation_binary = ifelse(Prec > median(Prec, na.rm=T), "Above 816 mm", "Below 816 mm"))
-```
+  mutate(Temperature_binary = ifelse(Temp > median(Temp, na.rm=T), paste("Above", round(median(woody_traits_georef$Temp/10, na.rm=T),1), "C",   sep=" ") ,paste("Below", round(median(woody_traits_georef$Temp/10, na.rm=T),1), "C", sep=" "))) %>%
+  mutate(Precipitation_binary = ifelse(Prec > median(Prec, na.rm=T), paste("Above", round(median(woody_traits_georef$Prec, na.rm=T),1), "mm",   sep=" ") ,paste("Below", round(median(woody_traits_georef$Prec, na.rm=T),1), "mm", sep=" "))) %>%
+  mutate(Precipitation_seasonality_binary = ifelse(Prec_CV > median(Prec_CV, na.rm=T), paste("Above", round(median(woody_traits_georef$Prec_CV, na.rm=T),1),   sep=" ") ,paste("Below", round(median(woody_traits_georef$Prec_CV, na.rm=T),1), sep=" ")))
 
+```
 
 Plot the 5 most populous pair-wise trait combinations, including high and low climate values - please forgive the coding below, still learning how to do functions using tidyverse and ggplot
 
 
-```{r}
-woody_traits_georef_spread %>%
+```{r echo=FALSE, fig.height= 8, fig.width= 6}
+SLA_LA_Temp <- woody_traits_georef_spread %>%
   ggplot(aes(specific_leaf_area, leaf_area, colour=Temperature_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
 
-woody_traits_georef_spread %>%
+SLA_LA_Prec <- woody_traits_georef_spread %>%
   ggplot(aes(specific_leaf_area, leaf_area, colour=Precipitation_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
 
-woody_traits_georef_spread %>%
+SLA_LA_Prec_CV <- woody_traits_georef_spread %>%
+  ggplot(aes(specific_leaf_area, leaf_area, colour=Precipitation_seasonality_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
+
+SLA_LA_Temp / SLA_LA_Prec / SLA_LA_Prec_CV
+
+SLA_LN_Temp <- woody_traits_georef_spread %>%
   ggplot(aes(specific_leaf_area, leaf_N_per_area, colour=Temperature_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
 
-woody_traits_georef_spread %>%
+SLA_LN_Prec <- woody_traits_georef_spread %>%
   ggplot(aes(specific_leaf_area, leaf_N_per_area, colour=Precipitation_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
 
-woody_traits_georef_spread %>%
+SLA_LN_Prec_CV <- woody_traits_georef_spread %>%
+  ggplot(aes(specific_leaf_area, leaf_N_per_area, colour=Precipitation_seasonality_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
+
+SLA_LN_Temp / SLA_LN_Prec / SLA_LN_Prec_CV
+
+SLA_deltaC_Temp <- woody_traits_georef_spread %>%
   ggplot(aes(specific_leaf_area, leaf_delta13C*-1, colour=Temperature_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
 
-woody_traits_georef_spread %>%
+SLA_deltaC_Prec <- woody_traits_georef_spread %>%
   ggplot(aes(specific_leaf_area, leaf_delta13C*-1, colour=Precipitation_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
 
-woody_traits_georef_spread %>%
+SLA_deltaC_Prec_CV <- woody_traits_georef_spread %>%
+  ggplot(aes(specific_leaf_area, leaf_delta13C*-1, colour=Precipitation_seasonality_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
+
+SLA_deltaC_Temp / SLA_deltaC_Prec / SLA_deltaC_Prec_CV
+
+LA_deltaC_Temp <- woody_traits_georef_spread %>%
   ggplot(aes(leaf_delta13C*-1, leaf_area, colour=Temperature_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
 
-woody_traits_georef_spread %>%
+LA_deltaC_Prec <- woody_traits_georef_spread %>%
   ggplot(aes(leaf_delta13C*-1, leaf_area, colour=Precipitation_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
 
-woody_traits_georef_spread %>%
+LA_deltaC_Prec_CV <- woody_traits_georef_spread %>%
+  ggplot(aes(leaf_delta13C*-1, leaf_area, colour=Precipitation_seasonality_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
+
+LA_deltaC_Temp / LA_deltaC_Prec / LA_deltaC_Prec_CV
+
+SLA_WD_Temp <-woody_traits_georef_spread %>%
   ggplot(aes(specific_leaf_area, wood_density, colour=Temperature_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
 
-woody_traits_georef_spread %>%
+SLA_WD_Prec <-woody_traits_georef_spread %>%
   ggplot(aes(specific_leaf_area, wood_density, colour=Precipitation_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
+
+SLA_WD_Prec_CV <-woody_traits_georef_spread %>%
+  ggplot(aes(specific_leaf_area, wood_density, colour=Precipitation_seasonality_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
+
+SLA_WD_Temp / SLA_WD_Prec / SLA_WD_Prec_CV
 
 ```
