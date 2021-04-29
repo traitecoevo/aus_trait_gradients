@@ -244,34 +244,6 @@ number_observations_per_trait_georeferenced %>%
 
 ```
 
-How many traits out of the 8 focal traits were measured in each site?
-
-```{r}
-n_traits_site_summary<-traits_site_summary %>% 
-  group_by(dataset_id, latitude, longitude, Temp, Prec) %>% 
-  summarise(n_traits=n_distinct(trait_name))
-
-n_traits_georef_site_summary<-traits_georef %>% 
-  group_by(dataset_id, latitude, longitude, Temp, Prec) %>% 
-  summarise(n_traits=n_distinct(trait_name))
-
-n_woody_traits_site_summary<-woody_traits_site_summary %>% 
-  group_by(dataset_id, latitude, longitude, Temp, Prec) %>% 
-  summarise(n_traits=n_distinct(trait_name))
-
-n_woody_traits_georef_site_summary<-woody_traits_georef %>% 
-  group_by(dataset_id, latitude, longitude, Temp, Prec) %>% 
-  summarise(n_traits=n_distinct(trait_name))
-
-
-hist(n_traits_site_summary$n_traits, xlab="Number of traits", ylab = "Sites", main = "Number of sites (total)")
-hist(n_traits_georef_site_summary$n_traits, xlab="Number of traits", ylab = "Sites", main = "Number of sites (georeferenced)")
-
-hist(n_woody_traits_site_summary$n_traits, xlab="Number of traits", ylab = "Sites (woody taxa only)", main = "Number of sites (total)")
-hist(n_woody_traits_georef_site_summary$n_traits, xlab="Number of traits", ylab = "Sites (woody taxa only)", main = "Number of sites (georeferenced)")
-
-```
-
 Basic patterns with environment - all data
 
 ```{r, fig.width=10}
