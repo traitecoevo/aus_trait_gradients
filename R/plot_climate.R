@@ -160,3 +160,57 @@ myTheme <-
 
     legend.text = element_text(size = 10)
   )
+
+# created two plotting functions for the CHELSA vs. Worldclim comparison, may be redundant or could be refined (also dependent on local TIF files which are too large to commit)
+
+plot_chelsa_climate_data <- function(variable = c("temp","prec")) {
+  
+  au_map <- raster::raster("data/australia.tif")
+  
+  if(variable == "temp") {
+    bioclim_chelsa <- raster::raster("data/CHELSA_bio10_01.tif")
+  }
+  
+  if(variable == "prec") {
+    bioclim_chelsa <- raster::raster("data/CHELSA_bio10_12.tif")
+  }
+  
+  bioclim_chelsa_au <- raster::crop(bioclim_chelsa, raster::extent(au_map))
+  
+  new.bioclim_chelsa <- raster::projectRaster(bioclim_chelsa_au, au_map)
+  
+  au_bioclim_chelsa <- raster::mask(new.bioclim_chelsa, au_map)
+  
+  sp::plot(au_bioclim_chelsa, main = "CHELSA")
+}
+
+plot_worldclim_climate_data <- function(variable = c("temp","prec")) {
+  
+  library(raster)
+  
+  # Download bioclim data using library (raster)
+  bioclim <- getData("worldclim", var = "bio", res = 10)
+  
+  if(variable == "temp"){
+    # Pick BIO1 (Mean Annual Temperature; T) 
+    bioclim <- bioclim[[c(1)]]
+  }
+  
+  if(variable == "prec"){
+    # Pick BI12 (Annual Precipitation; P) 
+    bioclim <- bioclim[[c(12)]]
+  }  
+  
+  # Load Australia landmass binary map
+  au_map <- raster("data/australia.tif")
+  
+  # Clip bioclim data with the au map
+  ## crop and mask
+  bioclim_au <- crop(bioclim, extent(au_map)) #%>% mask(.,au_map)
+  new.bioclim <-
+    raster::projectRaster(bioclim_au, au_map) # harmonize the spatial extent and projection
+  au_bioclim <- raster::mask(new.bioclim, au_map)
+  #plot
+  sp::plot(au_bioclim, main = "Worldclim")
+}
+

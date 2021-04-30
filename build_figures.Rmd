@@ -180,7 +180,7 @@ Plots:
 
 Austraits sites across biomes - total dataset vs. woody only dataset
 
-```{r eval=FALSE, fig.height=12, fig.width=6, include=FALSE}
+```{fig.height=12, fig.width=6}
 austraits_climate_space <-
   plot_climate_space(traits, au_bioclim)
 
@@ -192,7 +192,7 @@ austraits_climate_space / austraits_climate_space_woody
 
 Woody trait dataset
 
-```{r eval=FALSE, fig.height=12, fig.width=6, include=FALSE}
+```{fig.height=12, fig.width=6}
 austraits_site_by_trait <-
   plot_site_map_by_trait(traits)
 
@@ -363,5 +363,14 @@ SLA_WD_Prec_CV <-woody_traits_georef_spread %>%
   ggplot(aes(specific_leaf_area, wood_density, colour=Precipitation_seasonality_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
 
 SLA_WD_Temp / SLA_WD_Prec / SLA_WD_Prec_CV
+
+```
+
+Compare resolution of Worldclim at highest resolution to CHELSA - has same 19 variables but at higher resolution which could be more useful for ecological applications
+
+```{r echo=FALSE, fig.height= 12, fig.width=12}
+plot_worldclim_climate_data("temp") / plot_chelsa_climate_data("temp")
+
+plot_worldclim_climate_data("prec") / plot_chelsa_climate_data("prec")
 
 ```
