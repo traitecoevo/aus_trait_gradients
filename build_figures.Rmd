@@ -366,11 +366,11 @@ SLA_WD_Temp / SLA_WD_Prec / SLA_WD_Prec_CV
 
 ```
 
-Compare resolution of Worldclim at highest resolution to CHELSA - has same 19 variables but at higher resolution which could be more useful for ecological applications
+Compare resolution of Worldclim at highest resolution to CHELSA - has same 19 variables but at higher resolution which could be more useful for ecological applications - currently not available as TIF files from CHELSA are local and cannot be committed due to their size. climatedata::get_chelsa allows you to pull the tif files directly from the source but the get_chelsa was returning a connectivity error. 
 
 ```{r echo=FALSE, fig.height= 12, fig.width=12}
-plot_worldclim_climate_data("temp") / plot_chelsa_climate_data("temp")
-
-plot_worldclim_climate_data("prec") / plot_chelsa_climate_data("prec")
+# plot_worldclim_climate_data("temp") / plot_chelsa_climate_data("temp")
+# 
+# plot_worldclim_climate_data("prec") / plot_chelsa_climate_data("prec")
 
 ```
