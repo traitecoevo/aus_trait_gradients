@@ -1,4 +1,3 @@
-
 load_climate_data <- function() {
   ## Austraits: Precipitation–temperature space plot
   #### 01 Get climate data for Australia ####
