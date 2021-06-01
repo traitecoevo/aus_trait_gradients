@@ -4,22 +4,22 @@ load_climate_data <- function() {
   # Download bioclim data using library (raster)
   bioclim <- raster::getData("worldclim", var = "bio", res = 10)
   # Pick BIO1 (Mean Annual Temperature; T), BIO12 (Annual Precipitation; P) and BIO15 (Prec Seasonality (CV))
-  bioclim <- bioclim[[c(1, 12, 15)]]
-  names(bioclim) <- c("Temp", "Prec", "Prec_CV")
+  bioclim <- bioclim[[c(1, 12)]]
+  names(bioclim) <- c("Temp", "Prec")
   
   #### 02 Get the climate data for Australia ####
   # Load Australia landmass binary map
-  au_map <- raster::raster("data/australia.tif")
-  
-  # Clip bioclim data with the au map
-  ## crop and mask
-  bioclim_au <- raster::crop(bioclim, raster::extent(au_map))
-  
-  new.bioclim <-
-    raster::projectRaster(bioclim_au, au_map) # harmonize the spatial extent and projection
-  
-  au_bioclim <- raster::mask(new.bioclim, au_map)
-  
+  # au_map <- raster::raster("data/australia.tif")
+  # 
+  # # Clip bioclim data with the au map
+  # ## crop and mask
+  # bioclim_au <- raster::crop(bioclim, raster::extent(au_map))
+  # 
+  # new.bioclim <-
+  #   raster::projectRaster(bioclim_au, au_map) # harmonize the spatial extent and projection
+  # 
+  # au_bioclim <- raster::mask(new.bioclim, au_map)
+  # 
   # # Transform raster data into a tibble
   # au_bioclim_table <- 
   #   au_bioclim %>%
@@ -28,36 +28,26 @@ load_climate_data <- function() {
   #   as_tibble() %>%
   #   mutate(region = as.factor("Australia"))
   # au_bioclim_table
-  au_bioclim
+  bioclim
 }
 
 
-##### Functions ####
+terra_extract <- function(env_var, lon, lat){
+  terra::extract(x = env_var,  y = sp::SpatialPoints(cbind(lon, lat)),method = "simple") %>% as_tibble()
+}
+
+
 extract_climate_data <- function(df, climstack) {
   # df is a dataframe of trait data with lat and lon columns
   # climstack is a stack of gridded climate data
+  df_processed <- df %>%
+    na.omit()
   
-  df %>%
-    ungroup() %>%
-    dplyr::select(lat, lon) %>%
-    na.omit() %>% 
-    sf::st_as_sf(coords = c("lon", "lat")) %>%
-    sf::st_set_crs(4326) -> coord
-  terra::extract(x = climstack, y = sf::st_coordinates(coord),method="bilinear", na.rm = T, df = T) -> df_climate
+  df_processed %>% 
+    mutate(clim = purrr::map2(lon, lat , ~ terra_extract(au_bioclim, lon = .x, lat = .y))) %>% unnest(clim)
   
-  df_climate
 }
 
-
-#' Combine species occurence and climate data
-#'
-#' @param species_occurence_df
-#' @param climate_raster_data
-#'
-#' @return
-#' @export
-#'
-#' @examples
 combine_occurence_climate <- function(species_occurence_df, climate_raster_data) {
   LOOKUP <- species_occurence_df
   species_occurence_df %>%
@@ -68,3 +58,4 @@ combine_occurence_climate <- function(species_occurence_df, climate_raster_data)
   
   sp_clim_combined
 }
+
