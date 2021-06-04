@@ -17,19 +17,20 @@ editor_options:
 ---
 
 Load data
-```{r, warning=FALSE, message=FALSE}
+```{r}
 # Install dependencies as needed
 # devtools::install_deps()
 
 # Load packages and functions for this analysis
 devtools::load_all()
 
+
 # load data
 austraits <- readRDS("data/austraits_2.1.0.9000.rds")
 
 au_bioclim <- load_climate_data()
 
-#match with climate data
+# match with climate data
 au_sites_clim <-
   austraits$sites %>%
   filter(site_property %in% c("longitude (deg)", "latitude (deg)")) %>%
@@ -39,9 +40,18 @@ au_sites_clim <-
   mutate_at(c("latitude", "longitude"), ~(as.numeric(.x)))%>%
   combine_occurence_climate(au_bioclim)
 
-au_sites_clim %>% filter_all(any_vars(is.na(.)))
+na_sites<-au_sites_clim %>% filter_all(any_vars(is.na(.)))
 
+```
 
+```{r}
+australian_climate %>%
+  ggplot() +
+  geom_hex(data = australian_climate, aes(x = temperature, y = precip), colour="grey", fill="grey") +
+  geom_hex(data = au_sites_clim, aes(x=Temp, y=Prec), show.legend = TRUE,inherit.aes = FALSE) +
+  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+  scale_y_log10()
+    
 ```
 Calculate leaf_N_per_area and leaf_area for additional observations:
 ```{r}
@@ -97,7 +107,7 @@ calculated_data %>%
 Select subset of traits:
 ```{r}
 
-trait_names <-c("ci_at_Amax","ci_at_Asat","ci_over_ca","hydraulic_safety_margin_50","Jmax_per_area","leaf_delta13C","leaf_dark_respiration_per_area","leaf_N_per_area_calc","leaf_transpiration_at_Asat","leaf_transpiration_at_Amax","leaf_turgor_loss_point","photosynthetic_rate_per_area_ambient","sapwood_specific_conductivity","specific_leaf_area_calc","stem_hydraulic_conductivity","stomatal_resistance_conductance_ambient","Vcmax_per_area","vessel_density","vessel_diameter","water_potential_50percent_lost_conductivity","water_potential_88percent_lost_conductivity","wood_density")
+trait_names <-c("ci_at_Amax","ci_at_Asat","ci_over_ca","hydraulic_safety_margin_50","Jmax_per_area","leaf_delta13C","leaf_dark_respiration_per_area","leaf_N_per_area_calc","leaf_transpiration_at_Asat","leaf_transpiration_at_Amax","leaf_turgor_loss_point","photosynthetic_rate_per_area_ambient","sapwood_specific_conductivity","specific_leaf_area_calc","stem_hydraulic_conductivity","stomatal_resistance_conductance_ambient","Vcmax_per_area","vessel_density","vessel_diameter","water_potential_50percent_lost_conductivity","water_potential_88percent_lost_conductivity","wood_density","plant_height", "seed_mass")
 
 traits <- 
   austraits$traits %>%
@@ -159,19 +169,19 @@ Create a new trait dataframe to only include observations with associated latitu
 
 woody_traits_georef <- 
   woody_traits %>%
-  drop_na(latitude,longitude)
+  drop_na(lat,lon)
 
 
 woody_field_traits_georef <- 
   woody_field_traits %>%
-  drop_na(latitude,longitude)
+  drop_na(lat,lon)
 
 
 ```
 
 Plot the distribution of these species across Australia
 
-```{r, fig.height=20, fig.width=10}
+```{r eval=FALSE, fig.height=20, fig.width=10, include=FALSE}
 austraits_site_by_trait_woody <-
   plot_site_map_by_trait(woody_traits_georef)
 austraits_site_by_trait_woody_field <-
@@ -180,7 +190,7 @@ austraits_site_by_trait_woody_field <-
 austraits_site_by_trait_woody / austraits_site_by_trait_woody
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 number_observations_per_trait<-woody_traits %>%
   group_by(trait_name) %>%
   summarise(n_total_obs=n(), n_total_taxa=length(unique(taxon_name)))
@@ -195,7 +205,7 @@ number_observations_per_trait_georeferenced_field<-woody_field_traits_georef %>%
   summarise(n_field_georef_obs=n(), n_field_georef_taxa=length(unique(taxon_name))) %>%
   left_join(number_observations_per_trait_georeferenced)
 
-number_observations_per_trait_georeferenced_field %>% 
+number_observations_per_trait_georeferenced_field %>%
   relocate(n_total_obs, .after = trait_name) %>%
   relocate(n_georef_obs, .after = n_total_obs) %>%
   relocate(n_field_georef_obs, .after = n_georef_obs) %>%
@@ -203,33 +213,39 @@ number_observations_per_trait_georeferenced_field %>%
   relocate(n_georef_taxa, .after = n_total_taxa) %>%
   relocate(n_field_georef_taxa, .after = n_georef_taxa) %>%
   kbl(caption = "Table 1: Total trait dataset. n_total_obs: Total number of observations of a given trait, n_georef_obs: Number of observations of a given trait with georeference, n_field_georef_obs: Number of observations of a given trait with georeference and recorded in the field, n_total_taxa: Total number of taxa with at least one observation of a given trait, n_georef_taxa: Number of taxa with at least one georeferenced observation of a given trait, n_field_georef_taxa: Number of taxa with at least one georeferenced observation of a given trait and recorded in the field.") %>%
-  kable_classic(full_width = T, html_font = "Cambria")  
+  kable_classic(full_width = T, html_font = "Cambria")
 
 ```
 
 
 Basic patterns with environment - woody only
 
-# ```{r, fig.width=10}
-# woody_field_traits_georef %>%
-#   #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
-#   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
-#     ggplot(aes(Prec, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
-# ```
-# 
-# ```{r, fig.width=10}
-# woody_field_traits_georef %>%
-#   #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
-#   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
-#   ggplot(aes(Temp, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
-# ```
-# 
-# ```{r, fig.width=10}
-# woody_field_traits_georef %>%
-#   #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
-#   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
-#   ggplot(aes(Prec_CV, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
-# ```
+```{r, fig.width=10}
+woody_field_traits_georef %>%
+  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
+  mutate(value = if_else(trait_name=="water_potential_50percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_50percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  mutate(value = if_else(trait_name=="water_potential_88percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_88percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  ggplot(aes(Prec, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+```
+
+```{r, fig.width=10}
+woody_field_traits_georef %>%
+  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
+  mutate(value = if_else(trait_name=="water_potential_50percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_50percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  mutate(value = if_else(trait_name=="water_potential_88percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_88percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  ggplot(aes(Temp, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+```
+
+```{r, fig.width=10}
+woody_field_traits_georef %>%
+  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
+  mutate(value = if_else(trait_name=="water_potential_50percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_50percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  mutate(value = if_else(trait_name=="water_potential_88percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_88percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  ggplot(aes(Prec_CV, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+```
 
 
 <!-- Isaac - looking to do pair-wise relationships for common trait-pairs -->

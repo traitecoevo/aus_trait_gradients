@@ -1,24 +1,25 @@
+
 load_climate_data <- function() {
   ## Austraits: Precipitation–temperature space plot
   #### 01 Get climate data for Australia ####
   # Download bioclim data using library (raster)
-  bioclim <- raster::getData("worldclim", var = "bio", res = 10)
+  bioclim <- raster::getData("worldclim", var = "bio", res = 2.5)
   # Pick BIO1 (Mean Annual Temperature; T), BIO12 (Annual Precipitation; P) and BIO15 (Prec Seasonality (CV))
-  bioclim <- bioclim[[c(1, 12)]]
-  names(bioclim) <- c("Temp", "Prec")
+  bioclim <- bioclim[[c(1, 12, 15)]]
+  names(bioclim) <- c("Temp", "Prec", "Prec_CV")
   
   #### 02 Get the climate data for Australia ####
   # Load Australia landmass binary map
-  # au_map <- raster::raster("data/australia.tif")
+  au_map <- raster::raster("data/australia.tif")
   # 
   # # Clip bioclim data with the au map
   # ## crop and mask
-  # bioclim_au <- raster::crop(bioclim, raster::extent(au_map))
+  bioclim_au <- raster::crop(bioclim, raster::extent(au_map))
   # 
-  # new.bioclim <-
-  #   raster::projectRaster(bioclim_au, au_map) # harmonize the spatial extent and projection
+  new.bioclim <-
+    raster::projectRaster(bioclim, au_map) # harmonize the spatial extent and projection
   # 
-  # au_bioclim <- raster::mask(new.bioclim, au_map)
+  au_bioclim <- terra::mask(new.bioclim, au_map, touches=FALSE)
   # 
   # # Transform raster data into a tibble
   # au_bioclim_table <- 
@@ -28,13 +29,9 @@ load_climate_data <- function() {
   #   as_tibble() %>%
   #   mutate(region = as.factor("Australia"))
   # au_bioclim_table
-  bioclim
+  au_bioclim
 }
 
-
-terra_extract <- function(env_var, lon, lat){
-  terra::extract(x = env_var,  y = sp::SpatialPoints(cbind(lon, lat)),method = "simple") %>% as_tibble()
-}
 
 
 extract_climate_data <- function(df, climstack) {
@@ -48,8 +45,14 @@ extract_climate_data <- function(df, climstack) {
   
 }
 
+
+terra_extract <- function(env_var, lon, lat){
+  terra::extract(x = env_var,  y = sp::SpatialPoints(cbind(lon, lat)),method = "simple") %>% as_tibble()
+}
+
+
 combine_occurence_climate <- function(species_occurence_df, climate_raster_data) {
-  LOOKUP <- species_occurence_df
+  LOOKUP <- species_occurence_df %>% select(ID)
   species_occurence_df %>%
     group_by(ID) %>%
     rename(lat = latitude, lon = longitude) %>%
@@ -58,4 +61,3 @@ combine_occurence_climate <- function(species_occurence_df, climate_raster_data)
   
   sp_clim_combined
 }
-
