@@ -86,9 +86,9 @@ plot_site_map_by_trait <- function(trait_df) {
 
   df <- 
     trait_df %>%
-    select(site_name, latitude, longitude, trait_name) %>%
+    select(site_name, lat, lon, trait_name) %>%
     filter(
-      latitude > (-45), latitude < (-9.5), longitude < (153), longitude > (110)
+      lat > (-45), lat < (-9.5), lon < (153), lon > (110)
     ) %>%
     filter(
       !site_name %in% c(
@@ -103,7 +103,7 @@ plot_site_map_by_trait <- function(trait_df) {
     au_basemap() +
     geom_pointdensity(
       data = df,
-      aes(y = latitude, x = longitude),
+      aes(y = lat, x = lon),
       inherit.aes = FALSE,
       show.legend = FALSE,
       adjust = 1,

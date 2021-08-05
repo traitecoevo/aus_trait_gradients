@@ -17,12 +17,13 @@ editor_options:
 ---
 
 Load data
-```{r, warning=FALSE, message=FALSE}
+```{r}
 # Install dependencies as needed
 # devtools::install_deps()
 
 # Load packages and functions for this analysis
 devtools::load_all()
+
 
 # load data
 austraits <- readRDS("data/austraits_2.1.0.9000.rds")
@@ -36,8 +37,21 @@ au_sites_clim <-
   spread(site_property, value) %>%
   rowid_to_column("ID") %>%
   rename(latitude = `latitude (deg)`, longitude = `longitude (deg)`) %>%
-  mutate_at(c("latitude", "longitude"), ~suppressWarnings(as.numeric(.x))) %>%
+  mutate_at(c("latitude", "longitude"), ~(as.numeric(.x)))%>%
   combine_occurence_climate(au_bioclim)
+
+na_sites<-au_sites_clim %>% filter_all(any_vars(is.na(.)))
+
+```
+
+```{r}
+australian_climate %>%
+  ggplot() +
+  geom_hex(data = australian_climate, aes(x = temperature, y = precip), colour="grey", fill="grey") +
+  geom_hex(data = au_sites_clim, aes(x=Temp, y=Prec), show.legend = TRUE,inherit.aes = FALSE) +
+  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+  scale_y_log10()
+    
 ```
 Calculate leaf_N_per_area and leaf_area for additional observations:
 ```{r}
@@ -92,285 +106,197 @@ calculated_data %>%
 
 Select subset of traits:
 ```{r}
-# add max height, N_area, delta13_c
-# Also do for some alternatives: e.g. leaf_width, leaf_area ?
-trait_names_short <- c("leaf_width","leaf_delta13C","plant_height","leaf_N_per_area","specific_leaf_area","leaf_area", "wood_density", "seed_mass", "plant_growth_form")
-trait_names <- c("leaf_N_per_area","leaf_N_per_area_calc","specific_leaf_area","specific_leaf_area_calc","leaf_area","leaf_area_calc","leaf_width","leaf_delta13C","wood_density","seed_mass","plant_height", "plant_growth_form")
+
+trait_names <-c("ci_at_Amax","ci_at_Asat","ci_over_ca","hydraulic_safety_margin_50","Jmax_per_area","leaf_delta13C","leaf_dark_respiration_per_area","leaf_N_per_area_calc","leaf_transpiration_at_Asat","leaf_transpiration_at_Amax","leaf_turgor_loss_point","photosynthetic_rate_per_area_ambient","sapwood_specific_conductivity","specific_leaf_area_calc","stem_hydraulic_conductivity","stomatal_resistance_conductance_ambient","Vcmax_per_area","vessel_density","vessel_diameter","water_potential_50percent_lost_conductivity","water_potential_88percent_lost_conductivity","wood_density","plant_height", "seed_mass")
 
 traits <- 
   austraits$traits %>%
-  filter(trait_name %in% trait_names_short) %>% 
+  filter(trait_name %in% trait_names) %>%
   bind_rows(leaf_N_per_area_calcuated) %>%
   bind_rows(specific_leaf_area_calcuated) %>%
   bind_rows(leaf_area_calcuated) %>%
-  left_join(by = c("dataset_id", "site_name"), au_sites_clim)
+  left_join(by = c("dataset_id", "site_name"), au_sites_clim) %>%
+  mutate(value = as.numeric(value))
+
 ```
 
-Inspect data availability across growth forms (woody vs. non-woody)
+Remove datasets where there is a mix of field sites and common garden/botanical garden sites
 
 ```{r}
-plant_growth_form_index <- 
-  traits %>%
+field_traits <- traits %>%
+  filter(!(dataset_id %in% c("Ahrens_2019", "Crous_2013", "Crous_2019", "Du_2018",
+                            "Du_2019", "Duan_2015", "EsperonRodriguez_2019",
+                            "EsperonRodriguez_2020","Everingham_2020",
+                            "Farrell_2012", "Farrell_2013", "Farrell_2017", "Firn_2019",
+                            "Gallagher_2011_1", "Gallagher_2011_3", "Gallagher_2015", 
+                            "Gardiner_2019", "Geange_2017", "Geange_2020", "Ghannoum_2010",
+                            "Harrison_2009",
+                            "Hassiotou_2009", "Huang_2015", "Jagdish_2020", "Lewis_2015",
+                            "Lusk_2012", "Lusk_2014", "Moore_2019_2", "Reynolds_2018",
+                            "Roderick_2002", "Schulze_2006", "Smith_2012",
+                            "Tomlinson_2013","Tomlinson_2019", "Turner_2010", "Vesk_2019",
+                            "Vlasveld_2018", "Warren_2005", "Warren_2006"))) %>%
+  filter(!(site_name %in% c("Currency Creek Arboretum","Currency Creek Arboretum, South Australia",
+                            "Australian National University glasshouse","MU_campus",
+                            "Australian National Botanic Gardens","Australian National University"))) 
+```
+
+Identify all woody taxa in austraits and subset traits dataframe with it
+
+``` {r}
+
+austraits$traits %>%
   filter(trait_name == "plant_growth_form") %>%
-  rename("plant_growth_form" = "value") %>%
-  mutate(plant_form_broad = ifelse(plant_growth_form %in% c("grass-tree","herb shrub","herb subshrub","herb_large shrub","prostate_shrub","shrub subshrub","shrub tree","shrub treelet","subshrub","shrub","treelet","tree","tree tree"), "woody", "non_woody")) 
-
-# how many species for which growth form was recorded have both woody and non-woody forms
-number_of_forms_species <- plant_growth_form_index %>% 
-  group_by(taxon_name) %>%
-  summarise(length(unique(plant_form_broad))) %>%
-  rename(number_of_forms = 2)
-
-# join number of growth forms to plant_growth_form_index
-plant_growth_form_index <- plant_growth_form_index %>%
-  left_join(number_of_forms_species) %>%
-  select("taxon_name", "plant_form_broad", "plant_growth_form", "number_of_forms") %>%
-  group_by(taxon_name) %>%
-  slice(1)
-
-traits <- traits %>%
-  filter(!trait_name=="plant_growth_form") %>%
-  mutate_at("value", as.numeric)
-
-# reintroduce plant_growth_form index to trait dataframe
-traits <- traits %>%
-  left_join(plant_growth_form_index) 
-
-# how are samples distributed across species with 1, 2 or no recorded broad growth form (i.e. woody or non-woody)
-table(traits$number_of_forms, useNA = "ifany")
-```
-
-54600 trait samples belong to taxa which have been recorded to have  both woody and non-woody growth forms; 5555 trait samples belong to taxa which have not yet had a growth form recorded. Note that growth form is often not available for all trait observations of a given taxa. Will need to address how species with woody and non-woody forms should be addressed.
-
-Create trait data frame for woody taxa only
-
-```{r}
+  filter(value %in% c("hemi-epiphyte_shrub", "hemi-epiphyte_tree", "leafless_shrub_tree", "parasite_woody", 
+                       "subshrub", "shrub", "treelet", "tree", "shrub tree", "shrub treelet",
+                      "shrub subshrub","herb subshrub", "herb_large shrub", "herb shrub", "tree tree")) %>%
+  distinct(taxon_name) -> woody_taxa
+austraits$traits %>% filter(trait_name == "woodiness") %>% 
+  filter(value %in% c("woody","semi_woody")) %>%
+  distinct(taxon_name) %>%
+    bind_rows(woody_taxa) %>%
+    distinct(taxon_name) -> woody_taxa  
+  
 woody_traits <- traits %>%
-# remove species which had two forms - will keep ones that had no growth form identified (i.e. NAs)
-  filter(is.na(number_of_forms) | number_of_forms == 1 )  %>%
-# finally, remove species which were exclusively non-woody
-  filter(is.na(plant_form_broad) | plant_form_broad == "woody")
+  filter(taxon_name %in% woody_taxa$taxon_name)
+
+woody_field_traits <- field_traits %>%
+  filter(taxon_name %in% woody_taxa$taxon_name)
 ```
 
 Create a new trait dataframe to only include observations with associated latitude and longitude
 ```{r}
-traits_georef <- 
-  traits %>%
-  drop_na(latitude,longitude)
 
 woody_traits_georef <- 
   woody_traits %>%
-  drop_na(latitude,longitude)
+  drop_na(lat,lon)
 
-traits_site_summary <- 
-  traits %>% 
-  group_by(dataset_id, trait_name, latitude, longitude, Temp, Prec, Prec_CV) %>% 
-  summarise(nspp=n_distinct(taxon_name))
 
-woody_traits_site_summary <- 
-  traits %>% 
-  group_by(dataset_id, trait_name, latitude, longitude, Temp, Prec, Prec_CV) %>% 
-  summarise(nspp=n_distinct(taxon_name))
+woody_field_traits_georef <- 
+  woody_field_traits %>%
+  drop_na(lat,lon)
+
+
 ```
 
-Write some summaries about availability of data.....
+Plot the distribution of these species across Australia
 
-
-Plots:
-
-Austraits sites across biomes - total dataset vs. woody only dataset
-
-```{fig.height=12, fig.width=6}
-austraits_climate_space <-
-  plot_climate_space(traits, au_bioclim)
-
-austraits_climate_space_woody <-
-  plot_climate_space(woody_traits, au_bioclim)
-
-austraits_climate_space / austraits_climate_space_woody
-```
-
-Woody trait dataset
-
-```{fig.height=12, fig.width=6}
-austraits_site_by_trait <-
-  plot_site_map_by_trait(traits)
-
+```{r eval=FALSE, fig.height=20, fig.width=10, include=FALSE}
 austraits_site_by_trait_woody <-
-  plot_site_map_by_trait(woody_traits)
+  plot_site_map_by_trait(woody_traits_georef)
+austraits_site_by_trait_woody_field <-
+  plot_site_map_by_trait(woody_field_traits_georef)
 
-austraits_site_by_trait / austraits_site_by_trait_woody
+austraits_site_by_trait_woody / austraits_site_by_trait_woody
 ```
 
-Shading of points (blue -> yellow) indicates the number of neighbouring points (e.g. there is substantial seed mass data in SE Australia)
-
-Compare the number of observations and taxa in the **total dataset** for each trait which are **georeferenced vs. not georeferenced**.
-
-```{r}
-number_observations_per_trait<-traits %>%
-  group_by(trait_name) %>%
-  summarise(n_total_obs=length(value), n_total_taxa=length(unique(taxon_name)))
-
-number_observations_per_trait_georeferenced<-traits_georef %>%
-  group_by(trait_name) %>%
-  summarise(n_georef_obs=length(value), n_georef_taxa=length(unique(taxon_name))) %>%
-  left_join(number_observations_per_trait)
-
-number_observations_per_trait_georeferenced %>% 
-  relocate(n_total_obs, .after=trait_name) %>%
-  relocate(n_total_taxa, .before=n_georef_taxa) %>%
-  kbl(caption = "Table 1: Total trait dataset. n_total_obs: Total number of observations of a given trait, n_georef_obs: Number of observations of a given trait with georeference, n_total_taxa: Total number of taxa with at least one observation of a given trait, n_georef_taxa: Number of taxa with at least one georeferenced observation of a given trait") %>%
-  kable_classic(full_width = T, html_font = "Cambria")  
-
-```
-
-Compare the number of observations and taxa in the **woody dataset** for each trait which are **georeferenced vs. not georeferenced**.
-
-```{r}
+```{r eval=FALSE, include=FALSE}
 number_observations_per_trait<-woody_traits %>%
   group_by(trait_name) %>%
-  summarise(n_total_obs=length(value), n_total_taxa=length(unique(taxon_name)))
+  summarise(n_total_obs=n(), n_total_taxa=length(unique(taxon_name)))
 
 number_observations_per_trait_georeferenced<-woody_traits_georef %>%
   group_by(trait_name) %>%
-  summarise(n_georef_obs=length(value), n_georef_taxa=length(unique(taxon_name))) %>%
+  summarise(n_georef_obs=n(), n_georef_taxa=length(unique(taxon_name))) %>%
   left_join(number_observations_per_trait)
 
-number_observations_per_trait_georeferenced %>% 
-  relocate(n_total_obs, .after=trait_name) %>%
-  relocate(n_total_taxa, .before=n_georef_taxa) %>%
-  kbl(caption = "Table 2: Woody trait dataset. n_total_obs: Total number of observations of a given trait, n_georef_obs: Number of observations of a given trait with georeference, n_total_taxa: Total number of taxa with at least one observation of a given trait, n_georef_taxa: Number of taxa with at least one georeferenced observation of a given trait") %>%
-  kable_classic(full_width = T, html_font = "Cambria")  
+number_observations_per_trait_georeferenced_field<-woody_field_traits_georef %>%
+  group_by(trait_name) %>%
+  summarise(n_field_georef_obs=n(), n_field_georef_taxa=length(unique(taxon_name))) %>%
+  left_join(number_observations_per_trait_georeferenced)
+
+number_observations_per_trait_georeferenced_field %>%
+  relocate(n_total_obs, .after = trait_name) %>%
+  relocate(n_georef_obs, .after = n_total_obs) %>%
+  relocate(n_field_georef_obs, .after = n_georef_obs) %>%
+  relocate(n_total_taxa, .after = n_field_georef_obs) %>%
+  relocate(n_georef_taxa, .after = n_total_taxa) %>%
+  relocate(n_field_georef_taxa, .after = n_georef_taxa) %>%
+  kbl(caption = "Table 1: Total trait dataset. n_total_obs: Total number of observations of a given trait, n_georef_obs: Number of observations of a given trait with georeference, n_field_georef_obs: Number of observations of a given trait with georeference and recorded in the field, n_total_taxa: Total number of taxa with at least one observation of a given trait, n_georef_taxa: Number of taxa with at least one georeferenced observation of a given trait, n_field_georef_taxa: Number of taxa with at least one georeferenced observation of a given trait and recorded in the field.") %>%
+  kable_classic(full_width = T, html_font = "Cambria")
 
 ```
 
-Basic patterns with environment - all data
-
-```{r, fig.width=10}
-traits %>%
-  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
-  mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
-    ggplot(aes(Prec, value, colour=plant_form_broad)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
-```
-
-```{r, fig.width=10}
-traits %>%
-  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
-  mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
-  ggplot(aes(Temp, value, colour=plant_form_broad)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
-```
-
-```{r, fig.width=10}
-traits %>%
-  #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
-  mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
-  ggplot(aes(Prec_CV, value, colour=plant_form_broad)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
-```
 
 Basic patterns with environment - woody only
 
 ```{r, fig.width=10}
-woody_traits %>%
+woody_field_traits_georef %>%
   #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
+  mutate(value = if_else(trait_name=="water_potential_50percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_50percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  mutate(value = if_else(trait_name=="water_potential_88percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_88percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
-    ggplot(aes(Prec, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+  ggplot(aes(Prec, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
 ```
 
 ```{r, fig.width=10}
-woody_traits %>%
+woody_field_traits_georef %>%
   #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
+  mutate(value = if_else(trait_name=="water_potential_50percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_50percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  mutate(value = if_else(trait_name=="water_potential_88percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_88percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
   ggplot(aes(Temp, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
 ```
 
 ```{r, fig.width=10}
-woody_traits %>%
+woody_field_traits_georef %>%
   #multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
+  mutate(value = if_else(trait_name=="water_potential_50percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_50percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
+  mutate(value = if_else(trait_name=="water_potential_88percent_lost_conductivity", value*-1, value), trait_name = if_else(trait_name=="water_potential_88percent_lost_conductivity", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
   mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) %>%
   ggplot(aes(Prec_CV, value)) + geom_point(alpha = 0.2, stroke=0) + scale_x_log10() + scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
 ```
 
 
-Isaac - looking to do pair-wise relationships for common trait-pairs
+<!-- Isaac - looking to do pair-wise relationships for common trait-pairs -->
 
 ```{r}
 # pivot trait dataframe to give traits across species from each site
-woody_traits_georef_spread <- woody_traits_georef %>% 
-  select(observation_id,Temp, Prec, Prec_CV, taxon_name, trait_name, value) %>% 
+woody_field_traits_georef_spread <- woody_field_traits_georef %>%
+  select(observation_id,Temp, Prec, Prec_CV, taxon_name, trait_name, value) %>%
   pivot_wider(names_from = "trait_name", values_from = "value")%>%
-  unnest(trait_names[-12]) %>%
+  unnest(trait_names) %>%
   mutate(Temperature_binary = ifelse(Temp > median(Temp, na.rm=T), paste("Above", round(median(woody_traits_georef$Temp/10, na.rm=T),1), "C",   sep=" ") ,paste("Below", round(median(woody_traits_georef$Temp/10, na.rm=T),1), "C", sep=" "))) %>%
   mutate(Precipitation_binary = ifelse(Prec > median(Prec, na.rm=T), paste("Above", round(median(woody_traits_georef$Prec, na.rm=T),1), "mm",   sep=" ") ,paste("Below", round(median(woody_traits_georef$Prec, na.rm=T),1), "mm", sep=" "))) %>%
   mutate(Precipitation_seasonality_binary = ifelse(Prec_CV > median(Prec_CV, na.rm=T), paste("Above", round(median(woody_traits_georef$Prec_CV, na.rm=T),1),   sep=" ") ,paste("Below", round(median(woody_traits_georef$Prec_CV, na.rm=T),1), sep=" ")))
 
 ```
 
-Plot the 5 most populous pair-wise trait combinations, including high and low climate values - please forgive the coding below, still learning how to do functions using tidyverse and ggplot
-
-
-```{r echo=FALSE, fig.height= 8, fig.width= 6}
-SLA_LA_Temp <- woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, leaf_area, colour=Temperature_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_LA_Prec <- woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, leaf_area, colour=Precipitation_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_LA_Prec_CV <- woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, leaf_area, colour=Precipitation_seasonality_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_LA_Temp / SLA_LA_Prec / SLA_LA_Prec_CV
-
-SLA_LN_Temp <- woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, leaf_N_per_area, colour=Temperature_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_LN_Prec <- woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, leaf_N_per_area, colour=Precipitation_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_LN_Prec_CV <- woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, leaf_N_per_area, colour=Precipitation_seasonality_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_LN_Temp / SLA_LN_Prec / SLA_LN_Prec_CV
-
-SLA_deltaC_Temp <- woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, leaf_delta13C*-1, colour=Temperature_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_deltaC_Prec <- woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, leaf_delta13C*-1, colour=Precipitation_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_deltaC_Prec_CV <- woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, leaf_delta13C*-1, colour=Precipitation_seasonality_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_deltaC_Temp / SLA_deltaC_Prec / SLA_deltaC_Prec_CV
-
-LA_deltaC_Temp <- woody_traits_georef_spread %>%
-  ggplot(aes(leaf_delta13C*-1, leaf_area, colour=Temperature_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-LA_deltaC_Prec <- woody_traits_georef_spread %>%
-  ggplot(aes(leaf_delta13C*-1, leaf_area, colour=Precipitation_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-LA_deltaC_Prec_CV <- woody_traits_georef_spread %>%
-  ggplot(aes(leaf_delta13C*-1, leaf_area, colour=Precipitation_seasonality_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-LA_deltaC_Temp / LA_deltaC_Prec / LA_deltaC_Prec_CV
-
-SLA_WD_Temp <-woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, wood_density, colour=Temperature_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_WD_Prec <-woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, wood_density, colour=Precipitation_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_WD_Prec_CV <-woody_traits_georef_spread %>%
-  ggplot(aes(specific_leaf_area, wood_density, colour=Precipitation_seasonality_binary))+geom_point()+ scale_x_log10() + scale_y_log10()
-
-SLA_WD_Temp / SLA_WD_Prec / SLA_WD_Prec_CV
-
+```{r, fig.height=30, fig.width=30}
+pairs(woody_field_traits_georef_spread %>% select(trait_names))
 ```
 
-Compare resolution of Worldclim at highest resolution to CHELSA - has same 19 variables but at higher resolution which could be more useful for ecological applications (see this link https://www.nature.com/articles/sdata2017122) - comparison currently not available as TIF files from CHELSA are local and cannot be committed due to their size. climatedata::get_chelsa allows you to pull the tif files directly from the source but get_chelsa() was returning a connectivity error
+<!-- Plot the 5 most populous pair-wise trait combinations, including high and low climate values - please forgive the coding below, still learning how to do functions using tidyverse and ggplot -->
 
-```{r echo=FALSE, fig.height= 12, fig.width=12}
-# plot_worldclim_climate_data("temp") / plot_chelsa_climate_data("temp")
-# 
-# plot_worldclim_climate_data("prec") / plot_chelsa_climate_data("prec")
-
-```
+<!-- ```{r echo=FALSE, fig.height= 8, fig.width= 6} -->
+<!-- SLA_VDen <- woody_traits_georef_spread %>% -->
+<!--   ggplot(aes(specific_leaf_area, vessel_density))+geom_point()+ scale_x_log10() + scale_y_log10() -->
+<!-- SLA_VDen -->
+<!-- SLA_VDiam <- woody_traits_georef_spread %>% -->
+<!--   ggplot(aes(specific_leaf_area, vessel_diameter))+geom_point()+ scale_x_log10() + scale_y_log10() -->
+<!-- SLA_VDiam -->
+<!-- VDen_VDIAM <- woody_traits_georef_spread %>% -->
+<!--   ggplot(aes(vessel_diameter, vessel_density))+geom_point()+ scale_x_log10() + scale_y_log10() -->
+<!-- VDen_VDIAM -->
+<!-- VDen_WUE <- woody_traits_georef_spread %>% -->
+<!--   ggplot(aes(vessel_density, water_use_efficiency_intrinsic))+geom_point()+ scale_x_log10() + scale_y_log10() -->
+<!-- VDen_WUE -->
+<!-- VDiam_WUE <- woody_traits_georef_spread %>% -->
+<!--   ggplot(aes(vessel_diameter, water_use_efficiency_intrinsic))+geom_point()+ scale_x_log10() + scale_y_log10() -->
+<!-- VDiam_WUE -->
+<!-- SLA_HydC <- woody_traits_georef_spread %>% -->
+<!--   ggplot(aes(specific_leaf_area, leaf_hydraulic_conductivity))+geom_point()+ scale_x_log10() + scale_y_log10() -->
+<!-- SLA_HydC -->
+<!-- SLA_SHC <- woody_traits_georef_spread %>% -->
+<!--   ggplot(aes(specific_leaf_area, wood_conduit_fraction))+geom_point()+ scale_x_log10() + scale_y_log10() -->
+<!-- SLA_SHC -->
+<!-- VDen_WCF <- woody_traits_georef_spread %>% -->
+<!--   ggplot(aes(wood_conduit_fraction, vessel_density))+geom_point()+ scale_x_log10() + scale_y_log10() -->
+<!-- VDen_WCF -->
+<!-- VDiam_WCF <- woody_traits_georef_spread %>% -->
+<!--   ggplot(aes(vessel_diameter, wood_conduit_fraction))+geom_point()+ scale_x_log10() + scale_y_log10() -->
+<!-- VDiam_WCF -->
+<!-- VDiam_PH <- woody_traits_georef_spread %>% -->
+<!--   ggplot(aes(vessel_diameter, plant_height))+geom_point()+ scale_x_log10() + scale_y_log10() -->
+<!-- VDiam_PH -->
+<!-- ``` -->
