@@ -245,72 +245,6 @@ Define some core traits to focus on
 core_traits <- c("-1 * leaf_delta13C_calc","leaf_area_calc","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height", "seed_mass")
 ```
 
-Distribution of sites across the climate space of Australia
-
-```{r}
-plot_site_map_by_trait(woody_field_traits_georef %>% filter(trait_name %in% core_traits))
-
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Temp, y = Prec), colour="grey", fill="grey") +
-  geom_hex(data = au_sites_clim, aes(x=Temp, y=Prec), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-    
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Prec_CV, y = Prec), colour="grey", fill="grey") +
-  geom_hex(data = au_sites_clim, aes(x = Prec_CV, y = Prec), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Prec_CV, y = Temp), colour="grey", fill="grey") +
-  geom_hex(data = au_sites_clim, aes(x = Prec_CV, y = Temp), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-
-
-```
-
-Plot the distribution of these species across the climate space of Australia
-
-```{r eval=FALSE, include=FALSE}
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Temp, y = Prec), colour="grey", fill="grey") +
-  geom_hex(data = woody_field_traits_georef_euc_sites, aes(x=Temp, y=Prec), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-    
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Prec_CV, y = Prec), colour="grey", fill="grey") +
-  geom_hex(data = woody_field_traits_georef_euc_sites, aes(x = Prec_CV, y = Prec), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Prec_CV, y = Temp), colour="grey", fill="grey") +
-  geom_hex(data = woody_field_traits_georef_euc_sites, aes(x = Prec_CV, y = Temp), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-```
-
 Basic patterns with environment
 
 ```{r, fig.width=10}
@@ -428,3 +362,71 @@ ggplot() +
   stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
   viridis::scale_fill_viridis(trans = "log10") +ggtitle("Wood density")
 ```
+
+
+Distribution of sites across the climate space of Australia
+
+```{r}
+plot_site_map_by_trait(woody_field_traits_georef %>% filter(trait_name %in% core_traits))
+
+raster::values(au_bioclim) %>% 
+  as_data_frame() %>% 
+  drop_na() %>%
+  ggplot() +
+  geom_hex(aes(x = Temp, y = Prec), colour="grey", fill="grey") +
+  geom_hex(data = au_sites_clim, aes(x=Temp, y=Prec), show.legend = TRUE,inherit.aes = FALSE) +
+  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+  scale_y_log10()
+    
+raster::values(au_bioclim) %>% 
+  as_data_frame() %>% 
+  drop_na() %>%
+  ggplot() +
+  geom_hex(aes(x = Prec_CV, y = Prec), colour="grey", fill="grey") +
+  geom_hex(data = au_sites_clim, aes(x = Prec_CV, y = Prec), show.legend = TRUE,inherit.aes = FALSE) +
+  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+  scale_y_log10()
+
+raster::values(au_bioclim) %>% 
+  as_data_frame() %>% 
+  drop_na() %>%
+  ggplot() +
+  geom_hex(aes(x = Prec_CV, y = Temp), colour="grey", fill="grey") +
+  geom_hex(data = au_sites_clim, aes(x = Prec_CV, y = Temp), show.legend = TRUE,inherit.aes = FALSE) +
+  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+  scale_y_log10()
+
+
+```
+
+Plot the distribution of these species across the climate space of Australia
+
+```{r eval=FALSE, include=FALSE}
+raster::values(au_bioclim) %>% 
+  as_data_frame() %>% 
+  drop_na() %>%
+  ggplot() +
+  geom_hex(aes(x = Temp, y = Prec), colour="grey", fill="grey") +
+  geom_hex(data = woody_field_traits_georef_euc_sites, aes(x=Temp, y=Prec), show.legend = TRUE,inherit.aes = FALSE) +
+  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+  scale_y_log10()
+    
+raster::values(au_bioclim) %>% 
+  as_data_frame() %>% 
+  drop_na() %>%
+  ggplot() +
+  geom_hex(aes(x = Prec_CV, y = Prec), colour="grey", fill="grey") +
+  geom_hex(data = woody_field_traits_georef_euc_sites, aes(x = Prec_CV, y = Prec), show.legend = TRUE,inherit.aes = FALSE) +
+  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+  scale_y_log10()
+
+raster::values(au_bioclim) %>% 
+  as_data_frame() %>% 
+  drop_na() %>%
+  ggplot() +
+  geom_hex(aes(x = Prec_CV, y = Temp), colour="grey", fill="grey") +
+  geom_hex(data = woody_field_traits_georef_euc_sites, aes(x = Prec_CV, y = Temp), show.legend = TRUE,inherit.aes = FALSE) +
+  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+  scale_y_log10()
+```
+

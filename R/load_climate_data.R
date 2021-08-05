@@ -20,16 +20,16 @@ load_climate_data <- function() {
     raster::projectRaster(bioclim, au_map) # harmonize the spatial extent and projection
   # 
   # au_bioclim <- terra::mask(new.bioclim, au_map, touches=FALSE)
-  # 
-  # # Transform raster data into a tibble
-  # au_bioclim_table <- 
-  #   au_bioclim %>%
-  #   raster::as.data.frame() %>%
-  #   na.omit() %>%
-  #   as_tibble() %>%
-  #   mutate(region = as.factor("Australia"))
-  # au_bioclim_table
-  new.bioclim
+  
+  solar<-raster::raster("data/Australia_GISdata_LTAym_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF/Australia_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF/DNI.tif")
+  
+  new.solar <-
+    raster::projectRaster(solar, au_map) # harmonize the spatial extent and projection
+  
+  env.variables <- raster::addLayer(new.bioclim, new.solar)
+  
+  
+  env.variables
 }
 
 
