@@ -19,7 +19,7 @@ load_climate_data <- function() {
   new.bioclim <-
     raster::projectRaster(bioclim, au_map) # harmonize the spatial extent and projection
   # 
-  au_bioclim <- terra::mask(new.bioclim, au_map, touches=FALSE)
+  # au_bioclim <- terra::mask(new.bioclim, au_map, touches=FALSE)
   # 
   # # Transform raster data into a tibble
   # au_bioclim_table <- 
@@ -29,7 +29,7 @@ load_climate_data <- function() {
   #   as_tibble() %>%
   #   mutate(region = as.factor("Australia"))
   # au_bioclim_table
-  au_bioclim
+  new.bioclim
 }
 
 

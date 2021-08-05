@@ -158,7 +158,6 @@ calculated_data %>%
 
 Select subset of traits:
 ```{r include=FALSE}
-
 traits <- 
   austraits$traits %>%
   bind_rows(leaf_N_per_area_calcuated) %>%
@@ -170,8 +169,15 @@ traits <-
   group_by(dataset_id, taxon_name, site_name, trait_name) %>%
   summarise(value=median(value)) %>%
   left_join(by = c("dataset_id", "site_name"), au_sites_clim)
-```
+  
+#multiply leaf_delta13C by -1 to put it on the positive scale for log scaling
+traits %>%
+  mutate(value = if_else(trait_name=="leaf_delta13C", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C", paste0("-1 * ",trait_name, sep=""), trait_name)) -> traits
 
+traits %>%
+  mutate(value = if_else(trait_name=="leaf_delta13C_calc", value*-1, value), trait_name = if_else(trait_name=="leaf_delta13C_calc", paste0("-1 * ",trait_name, sep=""), trait_name))  -> traits
+
+```
 
 
 ```{r include=FALSE}
@@ -228,7 +234,7 @@ Create a new trait dataframe to only include observations with associated latitu
 
 woody_field_traits_georef <- 
   field_traits_georef %>%
-  filter(taxon_name %in% woody_taxa)
+  filter(taxon_name %in% woody_taxa$taxon_name)
 ```
 
 
@@ -236,7 +242,7 @@ Define some core traits to focus on
 
 ```{r}
 
-core_traits <- c("leaf_area_calc","-1 * leaf_delta13C","-1 * leaf_delta13C_calc","leaf_N_per_area_calc","leaf_P_per_area_calc","specific_leaf_area_calc","wood_density","plant_height", "seed_mass")
+core_traits <- c("-1 * leaf_delta13C_calc","leaf_area_calc","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height", "seed_mass")
 ```
 
 Distribution of sites across the climate space of Australia
