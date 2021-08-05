@@ -12,6 +12,7 @@ load_climate_data <- function() {
   # Load Australia landmass binary map
   au_map <- raster::raster("data/australia.tif")
 
+<<<<<<< Updated upstream
   # Clip bioclim data with the au map
   ## crop and mask
   bioclim_au <- raster::crop(bioclim, raster::extent(au_map))
@@ -21,6 +22,28 @@ load_climate_data <- function() {
 
   au_bioclim <- raster::mask(new.bioclim, au_map)
 
+=======
+  # 
+  # # Clip bioclim data with the au map
+  # ## crop and mask
+  # bioclim_au <- raster::crop(bioclim, raster::extent(au_map))
+  # 
+  new.bioclim <-
+  raster::projectRaster(bioclim, au_map) # harmonize the spatial extent and projection
+
+  solar<-raster::raster("data/Australia_GISdata_LTAym_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF/Australia_GISdata_LTAy_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF/DNI.tif")
+  
+  new.solar <-
+    raster::projectRaster(solar, au_map) # harmonize the spatial extent and projection
+  
+  env.variables <- raster::addLayer(new.bioclim, new.solar)
+
+
+  # au_bioclim <- terra::mask(new.bioclim, au_map)
+  # au_bioclim <- terra::mask(bioclim_au, au_map)
+  
+  # 
+>>>>>>> Stashed changes
   # # Transform raster data into a tibble
   # au_bioclim_table <- 
   #   au_bioclim %>%
@@ -29,11 +52,12 @@ load_climate_data <- function() {
   #   as_tibble() %>%
   #   mutate(region = as.factor("Australia"))
   # au_bioclim_table
-  au_bioclim
+  env.variables
 }
 
 
 
+<<<<<<< Updated upstream
 ##### Functions ####
 extract_climate_data <- function(df, climstack) {
   # df is a dataframe of trait data with lat and lon columns
@@ -61,12 +85,35 @@ extract_climate_data <- function(df, climstack) {
 #' @export
 #'
 #' @examples
+=======
+extract_climate_data_terra <- function(df, climstack) {
+  # df is a dataframe of trait data with lat and lon columns
+  # climstack is a stack of gridded climate data
+  df_processed <- df %>%
+    na.omit()
+  
+  df_processed %>% 
+    mutate(clim = purrr::map2(lon, lat , ~ terra_extract(climstack, lon = .x, lat = .y))) %>% unnest(clim) %>% select(!paste0("V",as.character(seq(1:ncol(raster::values(au_bioclim))))))
+  
+}
+
+terra_extract <- function(env_var, lon, lat){
+  terra::extract(x = env_var,  y = sp::SpatialPoints(cbind(lon, lat)),method = "bilinear") %>% as_tibble()
+}
+
+>>>>>>> Stashed changes
 combine_occurence_climate <- function(species_occurence_df, climate_raster_data) {
   species_occurence_df %>%
     group_by(ID) %>%
     rename(lat = latitude, lon = longitude) %>%
+<<<<<<< Updated upstream
     extract_climate_data(climate_raster_data) %>%
     left_join(species_occurence_df, ., by = "ID") -> sp_clim_combined
 
+=======
+    extract_climate_data_terra(climate_raster_data) %>%
+    merge(LOOKUP, ., by = "ID")   -> sp_clim_combined
+  
+>>>>>>> Stashed changes
   sp_clim_combined
 }
