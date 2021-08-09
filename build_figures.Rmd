@@ -25,7 +25,7 @@ devtools::load_all()
 source("R/load_climate_data.R")
 
 # load data
-austraits <- readRDS("data/austraits_2.1.0.9000.rds")
+austraits <- readRDS("data/austraits-3.0.2.rds")
 
 au_bioclim <- load_climate_data()
 
@@ -220,7 +220,28 @@ austraits$traits %>% filter(trait_name == "woodiness") %>%
   distinct(taxon_name) %>%
     bind_rows(woody_taxa) %>%
     distinct(taxon_name) -> woody_taxa  
+
+austraits$traits %>% filter(trait_name %in% c("woodiness","plant_growth_form")) %>%
+  distinct(taxon_name) -> have_woody_data
   
+austraits$traits %>% 
+  filter(!taxon_name %in% have_woody_data$taxon_name) %>%
+  pull(taxon_name) -> species_without_woody_data_3.0
+
+updated_woody_data<-read_csv("data/no_woody_data.csv") 
+
+austraits$taxa %>%
+  filter(taxon_name %in% species_without_woody_data_3.0) %>%
+  select(taxon_name, family) %>%
+  filter(!taxon_name %in% updated_woody_data$taxon_name)
+
+
+austraits$taxa %>%
+  filter(taxon_name %in% species_without_woody_data_3.0) %>%
+  select(taxon_name, family) %>%
+  write_csv(., "output/no_woody_data_3.0.csv")
+
+  read_csv("data/no_woody_data.csv") -> asd
 read_csv("data/no_woody_data.csv") %>%
   filter(woodiness %in% c("woody","semi_woody")) %>%
            distinct(taxon_name) %>%
