@@ -5,7 +5,7 @@ load_climate_data <- function() {
   bioclim <- raster::getData("worldclim", var = "bio", res = 2.5)
   # Pick BIO1 (Mean Annual Temperature; T), BIO12 (Annual Precipitation; P) and BIO15 (Prec Seasonality (CV))
   bioclim <- bioclim[[c(1,5,6, 12, 15)]]
-  names(bioclim) <- c("Temp","max_temp", "min_temp", "Prec", "Prec_CV")
+  names(bioclim) <- c("Temp_BC","max_temp_BC", "min_temp_BC", "Prec_BC", "Prec_CV_BC")
   
   #### 02 Get the climate data for Australia ####
   # Load Australia landmass binary map
