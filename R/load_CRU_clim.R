@@ -9,7 +9,7 @@ load_CRU_clim <- function(directory, file){
     new_CRU_clim <- readRDS(paste(directory,str_sub(file, end=-4), ".RDS", sep=""))
   }
   coordinates <- select(location_of_sites, longitude, latitude)
-  raster::extract(x = new_CRU_clim,  y = sp::SpatialPoints(coordinates),method = "simple")%>%
+  raster::extract(x = new_CRU_clim,  y = sp::SpatialPoints(coordinates, proj4string=raster::crs(au_map)),method = "simple")%>%
     as_tibble() %>%
     mutate(ID = location_of_sites$ID,longitude = location_of_sites$longitude, latitude = location_of_sites$latitude) %>%
     pivot_longer(-c(ID,longitude,latitude)) %>%
@@ -26,7 +26,7 @@ load_CRU_clim <- function(directory, file){
   
   iterate_buffer <- function(layer){
     i = layer
-    raster::extract(x = new_CRU_clim[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates), buffer = 5000, fun = mean, na.rm=T) %>%
+    raster::extract(x = new_CRU_clim[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates, proj4string=raster::crs(au_map)), buffer = 5000, fun = mean, na.rm=T) %>%
       as_tibble() %>%
       mutate(name = names(new_CRU_clim[[i]]), latitude = extracted_object_NA$latitude,longitude = extracted_object_NA$longitude, ID = extracted_object_NA$ID, buffer_extracted = "yes")
   }

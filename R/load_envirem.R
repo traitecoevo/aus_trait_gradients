@@ -10,7 +10,7 @@ load_envirem <- function(directory, name_of_csv) {
     worldclim <- raster::stack(paths)
     new_worldclim  <- raster::projectRaster(worldclim, au_map) 
     coordinates <- select(location_of_sites, longitude, latitude)
-    raster::extract(x = new_worldclim,  y = sp::SpatialPoints(coordinates),method = "simple") %>% 
+    raster::extract(x = new_worldclim,  y = sp::SpatialPoints(coordinates, proj4string=raster::crs(au_map)),method = "simple") %>% 
         as_tibble() %>% 
         mutate(ID = location_of_sites$ID,longitude = location_of_sites$longitude, latitude = location_of_sites$latitude)  -> extracted_object
     
@@ -23,7 +23,7 @@ load_envirem <- function(directory, name_of_csv) {
     extracted_object_NA %>%
       select(longitude, latitude)  -> extracted_object_NA_coordinates
     
-    raster::extract(x = new_worldclim,  y = sp::SpatialPoints(extracted_object_NA_coordinates), buffer = 5000, fun = mean, na.rm=T) %>%
+    raster::extract(x = new_worldclim,  y = sp::SpatialPoints(extracted_object_NA_coordinates, proj4string=raster::crs(au_map)), buffer = 5000, fun = mean, na.rm=T) %>%
         as_tibble() %>% 
         mutate(ID = extracted_object_NA$ID,longitude = extracted_object_NA$longitude, latitude = extracted_object_NA$latitude) -> extracted_NA_values
    

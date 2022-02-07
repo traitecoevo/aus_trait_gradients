@@ -21,14 +21,24 @@ Load data
 # Install dependencies as needed
 # devtools::install_deps()
 # Load packages and functions for this analysis
+
+rm(list=ls())
 devtools::load_all()
 source("R/load_climate_data.R")
 
-# load data
+
+# load trait data
 austraits <- readRDS("data/austraits-3.0.2.rds")
 
-au_bioclim <- load_climate_data()
+```
 
+```{r}
+#where are sites located?
+au_bioclim <- load_climate_data()
+```
+
+
+```{r, warning=FALSE, message=FALSE}
 # match with climate data
 au_sites_clim <-
   austraits$sites %>%
@@ -39,19 +49,25 @@ au_sites_clim <-
   mutate_at(c("latitude", "longitude"), ~suppressWarnings(as.numeric(.x))) %>%
   combine_occurence_climate(au_bioclim)
 
-raster::plot(au_bioclim[[3]])
+```
 
+
+```{r}
 na_sites<-au_sites_clim %>% filter_all(any_vars(is.na(.)))
 ```
 
 ```{r, fig.height=10, fig.width=14}
-
-raster::plot(au_bioclim[[1]], col=rev(terrain.colors(1000)))
-points(au_sites_clim$lat~au_sites_clim$lon, pch=19, col=rev(terrain.colors(1000))[round((au_sites_clim$Temp/max(au_sites_clim$Temp, na.rm=T)*1000-160)*1.19,0)])
-
-
-raster::plot(au_bioclim[[2]], col=rev(terrain.colors(100)))
-points(au_sites_clim$lat~au_sites_clim$lon, pch=19, col=rev(terrain.colors(100))[round(au_sites_clim$Prec/max(au_sites_clim$Prec, na.rm=T)*100,0)])
+# au_bioclim[[5]][au_bioclim[[5]] < 0] <- NA
+# raster::plot(au_bioclim[[5]], col=rev(terrain.colors(1000)))
+# points(au_sites_clim$lat~au_sites_clim$lon, pch=19, col=rev(terrain.colors(1000))[round((au_sites_clim$Photosynthetically.active.radiation/max(au_sites_clim$Photosynthetically.active.radiation, na.rm=T)*1000-656)*1000/343,0)])
+# 
+# pdf("output/test.pdf", height=8, width=10)
+# raster::plot(au_bioclim[[1]], col=rev(terrain.colors(1000)))
+# points(au_sites_clim$lat~au_sites_clim$lon, pch=19, col=rev(terrain.colors(1000))[round((au_sites_clim$Temp/max(au_sites_clim$Temp, na.rm=T)*1000-160)*1.19,0)])
+# dev.off()
+# 
+# raster::plot(au_bioclim[[2]], col=rev(terrain.colors(100)))
+# points(au_sites_clim$lat~au_sites_clim$lon, pch=19, col=rev(terrain.colors(100))[round(au_sites_clim$Prec/max(au_sites_clim$Prec, na.rm=T)*100,0)])
 
 ```
 
@@ -123,14 +139,17 @@ calculated_data %>%
 
 ```
 
-Extract values for delta13c from ci:ca ratios using equations in Farqhuar (1989) and Guerrieri et al. (2019; PNAS)
+Extract values for ci:ca ratios from delta13c using equations in Farqhuar (1989) and Wang et al. (2017)
 
-The ci:ca ratio is linked to the carbon isotope fraction of plant samples according the following equation:
+Carbon isotope discrimination values are dervied from delta_13C $\delta ^{13}C$ using the following equation from Farqhuar (1989):
 
-$$a+(b-a)\frac{c_i}{c_a}=\frac{\delta^{13}C_a-\delta^{13}C_c}{1+\frac{\delta^{13}C_c}{1000}},$$
-where $\delta^{13}C_a$ is approximately equal to -8, a = 4.4 and b = 27.Rearranging the above equation to solve $\delta^{13}C_c$ gives:
+$$\Delta = \frac{\delta_a-\delta ^{13}C}{1+\delta ^{13}C/1000}$$
 
-$$\delta^{13}C_c = \frac{-8000-1000*a+(b-a)\frac{c_i}{c_a}}{a+(b-a)\frac{c_i}{c_a}+1000}$$
+The ci:ca ratio $(X)$ is linked to the carbon isotope discrimination value of plant samples according the following equation:
+
+$$X = \frac{\Delta-a}{b-a},$$
+where a’ and b’ have standard values 4.4‰ and 27‰, representing the diffusional 
+and biochemical components of carbon isotope discrimination, respectively (Wang et al. 2017).
 
 
 ``` {r}
@@ -141,18 +160,49 @@ austraits$traits %>%
   group_by(trait_name, observation_id, taxon_name, dataset_id, site_name, context_name, date) %>%
   summarise(value = mean(value)) %>%
   ungroup() %>%
-  spread(key = trait_name, value = value)%>%
-  mutate(leaf_delta13C_calc = (-8000-1000*(4.4+(27-4.4)*ci_over_ca))/(4.4+(27-4.4)*ci_over_ca+1000))%>%
-  mutate(leaf_delta13C_combined = ifelse(!is.na(leaf_delta13C),leaf_delta13C,leaf_delta13C_calc)) ->calculated_data
+  spread(key = trait_name, value = value) -> asd
 
+austraits$traits %>% 
+  filter(trait_name %in% c("ci_over_ca", "leaf_delta13C")) %>%
+  select(trait_name, value, observation_id, taxon_name,dataset_id,site_name, context_name, date) %>%
+  mutate(value = as.numeric(value)) %>%
+  group_by(trait_name, observation_id, taxon_name, dataset_id, site_name, context_name, date) %>%
+  summarise(value = mean(value)) %>%
+  ungroup() %>%
+  spread(key = trait_name, value = value)%>%
+  mutate(ci_over_ca_calc = (((-8-leaf_delta13C/(1+leaf_delta13C/1000))-4.4)/(27-4.4)))%>%
+  mutate(ci_over_ca_combined = ifelse(!is.na(ci_over_ca),ci_over_ca,ci_over_ca_calc)) ->calculated_data
+
+calculated_data %>% drop_na(leaf_delta13C, ci_over_ca)%>% mutate(proportion_difference = abs(ci_over_ca - ci_over_ca_calc)/ci_over_ca_calc) -> ci_over_ca_validation
+```
+
+
+``` {r, fig.width=10}
+hist(ci_over_ca_validation$proportion_difference, xlab = "abs(Observed_X-Predicted_X)/Predicted_X", main = "Difference between observed and predicted X")
+```
+
+
+``` {r, fig.width=10}
+ci_over_ca_validation %>% ggplot(aes(x=ci_over_ca, y=ci_over_ca_calc))+geom_point()+xlab("Observed ci_over_ca")+ylab("Estimated ci_over_ca")+theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"))
+```
+
+
+``` {r, fig.width=10}
+ci_over_ca_validation %>% ggplot(aes(x=ci_over_ca, y=ci_over_ca_calc, color=dataset_id == "Dong_2017"))+geom_point()+xlab("Observed ci_over_ca")+ylab("Estimated ci_over_ca")+theme(axis.text=element_text(size=12),
+        axis.title=element_text(size=14,face="bold"))
+```
+
+
+``` {r}
 calculated_data %>%
   select(observation_id, taxon_name, dataset_id, site_name, context_name, date, 
-         leaf_delta13C_combined) %>%
-  filter(!is.na(leaf_delta13C_combined)) %>%
-  mutate(units = "per mille",
-         trait_name = "leaf_delta13C_calc",
-         value = as.character(leaf_delta13C_combined)) %>%
-  select(-leaf_delta13C_combined) -> leaf_delta13C_calculated
+         ci_over_ca_combined) %>%
+  filter(!is.na(ci_over_ca_combined)) %>%
+  mutate(units = "unitless",
+         trait_name = "ci_over_ca_calc",
+         value = as.character(ci_over_ca_combined)) %>%
+  select(-ci_over_ca_combined) -> ci_over_ca_calculated
 
 ```
 
@@ -163,7 +213,7 @@ traits <-
   bind_rows(leaf_N_per_area_calcuated) %>%
   bind_rows(leaf_P_per_area_calcuated) %>%
   bind_rows(specific_leaf_area_calcuated) %>%
-  bind_rows(leaf_delta13C_calculated)%>%
+  bind_rows(ci_over_ca_calculated)%>%
   bind_rows(leaf_area_calcuated) %>%
   mutate(value = as.numeric(value)) %>%
   group_by(dataset_id, taxon_name, site_name, trait_name) %>%
@@ -263,7 +313,7 @@ Define some core traits to focus on
 
 ```{r}
 
-core_traits <- c("-1 * leaf_delta13C_calc","leaf_area_calc","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height", "seed_mass")
+core_traits <- c("ci_over_ca_calc","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height", "seed_mass", "leaf_area_calc")
 ```
 
 Basic patterns with environment
@@ -283,8 +333,21 @@ woody_field_traits_georef %>%
 ```{r, fig.width=10}
 woody_field_traits_georef %>%
   filter(trait_name %in% core_traits) %>%
-  ggplot(aes(DNI, value)) + geom_point(alpha = 0.2, stroke=0)+ scale_y_log10() + facet_wrap(~trait_name, scales = "free_y")
+  ggplot(aes(DNI, value)) + geom_point(alpha = 0.2, stroke=0)+ scale_y_log10() + facet_wrap(~trait_name, scales = "free_y") + xlab("Annual mean direct normal irradiation")
 ```
+
+```{r, fig.width=10}
+woody_field_traits_georef %>%
+  filter(trait_name %in% core_traits) %>%
+  ggplot(aes(Photosynthetically.active.radiation.1, value)) + geom_point(alpha = 0.2, stroke=0)+ scale_y_log10() + facet_wrap(~trait_name, scales = "free_y") + xlab("Average PAR January")
+```
+
+```{r, fig.width=10}
+woody_field_traits_georef %>%
+  filter(trait_name %in% core_traits) %>%
+  ggplot(aes(annual_PAR, value)) + geom_point(alpha = 0.2, stroke=0)+ scale_y_log10() + xlab("Annual mean of monthly average PAR") + facet_wrap(~trait_name, scales = "free_y")
+```
+
 
 ```{r, fig.width=10}
 woody_field_traits_georef %>%
@@ -293,161 +356,161 @@ woody_field_traits_georef %>%
 ```
 
 
-```{r, fig.width=10}
-dev.off()
-pdf("output/core_traits_prec.pdf", height=8, width=11)
-woody_field_traits_georef %>%
-  filter(trait_name %in% core_traits) %>%
-  ggplot(aes(Prec, value), col = "black") + geom_point(alpha = 0.2, stroke=0)+scale_x_log10() + scale_y_log10()+facet_wrap(~trait_name, scales = "free_y")
-dev.off()
-```
-
-```{r, fig.width=10}
-dev.off()
-pdf("output/core_traits_temp.pdf", height=8, width=11)
-woody_field_traits_georef %>%
-  filter(trait_name %in% core_traits) %>%
-  ggplot(aes(Temp, value), col = "black") + geom_point(alpha = 0.2, stroke=0)+scale_x_log10() + scale_y_log10() +facet_wrap(~trait_name, scales = "free_y")
-dev.off()
-```
-
-```{r, fig.width=10}
-dev.off()
-pdf("output/core_traits_prec_cv.pdf", height=8, width=11)
-woody_field_traits_georef %>%
-  filter(trait_name %in% core_traits) %>%
-  ggplot(aes(Prec_CV, value), col = "black") + geom_point(alpha = 0.2, stroke=0)+scale_x_log10() + scale_y_log10() +facet_wrap(~trait_name, scales = "free_y")
-dev.off()
-```
-
-```{r, fig.width=10}
-dev.off()
-pdf("output/core_traits_DNI.pdf", height=8, width=11)
-woody_field_traits_georef %>%
-  filter(trait_name %in% core_traits) %>%
-  ggplot(aes(DNI, value), col = "black") + geom_point(alpha = 0.2, stroke=0)+scale_x_log10() + scale_y_log10() +facet_wrap(~trait_name, scales = "free_y")
-dev.off()
-```
-
-```{r, fig.width=10}
-dev.off()
-pdf("output/core_traits_lat.pdf", height=8, width=11)
-woody_field_traits_georef %>%
-  filter(trait_name %in% core_traits) %>%
-  ggplot(aes(lat, value), col = "black") + geom_point(alpha = 0.2, stroke=0)+ scale_y_log10() +facet_wrap(~trait_name, scales = "free_y")
-dev.off()
-```
-
-```{r eval=FALSE, fig.width=10, include=FALSE}
-
-woody_field_traits_georef %>%
-  filter(trait_name=="leaf_area_calc") %>%
-ggplot() +
-  aes(x = Temp, y = Prec, z = value) +
-  stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
-  viridis::scale_fill_viridis(trans = "log10") +ggtitle("Leaf area")
-
-
-woody_field_traits_georef %>%
-  filter(trait_name=="leaf_N_per_area_calc") %>%
-ggplot() +
-  aes(x = Temp, y = Prec, z = value) +
-  stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
-  viridis::scale_fill_viridis(trans = "log10") +ggtitle("Leaf N per area")
-
-woody_field_traits_georef %>%
-  filter(trait_name=="plant_height") %>%
-ggplot() +
-  aes(x = Temp, y = Prec, z = value) +
-  stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
-  viridis::scale_fill_viridis(trans = "log10") +ggtitle("Plant height")
-
-woody_field_traits_georef %>%
-  filter(trait_name=="seed_mass") %>%
-ggplot() +
-  aes(x = Temp, y = Prec, z = value) +
-  stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
-  viridis::scale_fill_viridis(trans = "log10") +ggtitle("Seed mass")
-
-woody_field_traits_georef %>%
-  filter(trait_name=="specific_leaf_area_calc") %>%
-ggplot() +
-  aes(x = Temp, y = Prec, z = value) +
-  stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
-  viridis::scale_fill_viridis(trans = "log10") +ggtitle("Specific leaf area")
-
-woody_field_traits_georef %>%
-  filter(trait_name=="wood_density") %>%
-ggplot() +
-  aes(x = Temp, y = Prec, z = value) +
-  stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
-  viridis::scale_fill_viridis(trans = "log10") +ggtitle("Wood density")
-```
-
-
-Distribution of sites across the climate space of Australia
-
-```{r}
-plot_site_map_by_trait(woody_field_traits_georef %>% filter(trait_name %in% core_traits))
-
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Temp, y = Prec), colour="grey", fill="grey") +
-  geom_hex(data = au_sites_clim, aes(x=Temp, y=Prec), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-    
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Prec_CV, y = Prec), colour="grey", fill="grey") +
-  geom_hex(data = au_sites_clim, aes(x = Prec_CV, y = Prec), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Prec_CV, y = Temp), colour="grey", fill="grey") +
-  geom_hex(data = au_sites_clim, aes(x = Prec_CV, y = Temp), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-
-
-```
-
-Plot the distribution of these species across the climate space of Australia
-
-```{r eval=FALSE, include=FALSE}
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Temp, y = Prec), colour="grey", fill="grey") +
-  geom_hex(data = woody_field_traits_georef_euc_sites, aes(x=Temp, y=Prec), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-    
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Prec_CV, y = Prec), colour="grey", fill="grey") +
-  geom_hex(data = woody_field_traits_georef_euc_sites, aes(x = Prec_CV, y = Prec), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-
-raster::values(au_bioclim) %>% 
-  as_data_frame() %>% 
-  drop_na() %>%
-  ggplot() +
-  geom_hex(aes(x = Prec_CV, y = Temp), colour="grey", fill="grey") +
-  geom_hex(data = woody_field_traits_georef_euc_sites, aes(x = Prec_CV, y = Temp), show.legend = TRUE,inherit.aes = FALSE) +
-  viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
-  scale_y_log10()
-```
+# ```{r, fig.width=10}
+# dev.off()
+# pdf("output/core_traits_prec.pdf", height=8, width=11)
+# woody_field_traits_georef %>%
+#   filter(trait_name %in% core_traits) %>%
+#   ggplot(aes(Prec, value), col = "black") + geom_point(alpha = 0.2, stroke=0)+scale_x_log10() + scale_y_log10()+facet_wrap(~trait_name, scales = "free_y")
+# dev.off()
+# ```
+# 
+# ```{r, fig.width=10}
+# dev.off()
+# pdf("output/core_traits_temp.pdf", height=8, width=11)
+# woody_field_traits_georef %>%
+#   filter(trait_name %in% core_traits) %>%
+#   ggplot(aes(Temp, value), col = "black") + geom_point(alpha = 0.2, stroke=0)+scale_x_log10() + scale_y_log10() +facet_wrap(~trait_name, scales = "free_y")
+# dev.off()
+# ```
+# 
+# ```{r, fig.width=10}
+# dev.off()
+# pdf("output/core_traits_prec_cv.pdf", height=8, width=11)
+# woody_field_traits_georef %>%
+#   filter(trait_name %in% core_traits) %>%
+#   ggplot(aes(Prec_CV, value), col = "black") + geom_point(alpha = 0.2, stroke=0)+scale_x_log10() + scale_y_log10() +facet_wrap(~trait_name, scales = "free_y")
+# dev.off()
+# ```
+# 
+# ```{r, fig.width=10}
+# dev.off()
+# pdf("output/core_traits_DNI.pdf", height=8, width=11)
+# woody_field_traits_georef %>%
+#   filter(trait_name %in% core_traits) %>%
+#   ggplot(aes(DNI, value), col = "black") + geom_point(alpha = 0.2, stroke=0)+scale_x_log10() + scale_y_log10() +facet_wrap(~trait_name, scales = "free_y")
+# dev.off()
+# ```
+# 
+# ```{r, fig.width=10}
+# dev.off()
+# pdf("output/core_traits_lat.pdf", height=8, width=11)
+# woody_field_traits_georef %>%
+#   filter(trait_name %in% core_traits) %>%
+#   ggplot(aes(lat, value), col = "black") + geom_point(alpha = 0.2, stroke=0)+ scale_y_log10() +facet_wrap(~trait_name, scales = "free_y")
+# dev.off()
+# ```
+# 
+# ```{r eval=FALSE, fig.width=10, include=FALSE}
+# 
+# woody_field_traits_georef %>%
+#   filter(trait_name=="leaf_area_calc") %>%
+# ggplot() +
+#   aes(x = Temp, y = Prec, z = value) +
+#   stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
+#   viridis::scale_fill_viridis(trans = "log10") +ggtitle("Leaf area")
+# 
+# 
+# woody_field_traits_georef %>%
+#   filter(trait_name=="leaf_N_per_area_calc") %>%
+# ggplot() +
+#   aes(x = Temp, y = Prec, z = value) +
+#   stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
+#   viridis::scale_fill_viridis(trans = "log10") +ggtitle("Leaf N per area")
+# 
+# woody_field_traits_georef %>%
+#   filter(trait_name=="plant_height") %>%
+# ggplot() +
+#   aes(x = Temp, y = Prec, z = value) +
+#   stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
+#   viridis::scale_fill_viridis(trans = "log10") +ggtitle("Plant height")
+# 
+# woody_field_traits_georef %>%
+#   filter(trait_name=="seed_mass") %>%
+# ggplot() +
+#   aes(x = Temp, y = Prec, z = value) +
+#   stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
+#   viridis::scale_fill_viridis(trans = "log10") +ggtitle("Seed mass")
+# 
+# woody_field_traits_georef %>%
+#   filter(trait_name=="specific_leaf_area_calc") %>%
+# ggplot() +
+#   aes(x = Temp, y = Prec, z = value) +
+#   stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
+#   viridis::scale_fill_viridis(trans = "log10") +ggtitle("Specific leaf area")
+# 
+# woody_field_traits_georef %>%
+#   filter(trait_name=="wood_density") %>%
+# ggplot() +
+#   aes(x = Temp, y = Prec, z = value) +
+#   stat_summary_hex(size = 0.1, color = "black", fun = mean) +scale_x_log10() + scale_y_log10() +
+#   viridis::scale_fill_viridis(trans = "log10") +ggtitle("Wood density")
+# ```
+# 
+# 
+# Distribution of sites across the climate space of Australia
+# 
+# ```{r}
+# plot_site_map_by_trait(woody_field_traits_georef %>% filter(trait_name %in% core_traits))
+# 
+# raster::values(au_bioclim) %>% 
+#   as_data_frame() %>% 
+#   drop_na() %>%
+#   ggplot() +
+#   geom_hex(aes(x = Temp, y = Prec), colour="grey", fill="grey") +
+#   geom_hex(data = au_sites_clim, aes(x=Temp, y=Prec), show.legend = TRUE,inherit.aes = FALSE) +
+#   viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+#   scale_y_log10()
+#     
+# raster::values(au_bioclim) %>% 
+#   as_data_frame() %>% 
+#   drop_na() %>%
+#   ggplot() +
+#   geom_hex(aes(x = Prec_CV, y = Prec), colour="grey", fill="grey") +
+#   geom_hex(data = au_sites_clim, aes(x = Prec_CV, y = Prec), show.legend = TRUE,inherit.aes = FALSE) +
+#   viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+#   scale_y_log10()
+# 
+# raster::values(au_bioclim) %>% 
+#   as_data_frame() %>% 
+#   drop_na() %>%
+#   ggplot() +
+#   geom_hex(aes(x = Prec_CV, y = Temp), colour="grey", fill="grey") +
+#   geom_hex(data = au_sites_clim, aes(x = Prec_CV, y = Temp), show.legend = TRUE,inherit.aes = FALSE) +
+#   viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+#   scale_y_log10()
+# 
+# 
+# ```
+# 
+# Plot the distribution of these species across the climate space of Australia
+# 
+# ```{r eval=FALSE, include=FALSE}
+# raster::values(au_bioclim) %>% 
+#   as_data_frame() %>% 
+#   drop_na() %>%
+#   ggplot() +
+#   geom_hex(aes(x = Temp, y = Prec), colour="grey", fill="grey") +
+#   geom_hex(data = woody_field_traits_georef_euc_sites, aes(x=Temp, y=Prec), show.legend = TRUE,inherit.aes = FALSE) +
+#   viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+#   scale_y_log10()
+#     
+# raster::values(au_bioclim) %>% 
+#   as_data_frame() %>% 
+#   drop_na() %>%
+#   ggplot() +
+#   geom_hex(aes(x = Prec_CV, y = Prec), colour="grey", fill="grey") +
+#   geom_hex(data = woody_field_traits_georef_euc_sites, aes(x = Prec_CV, y = Prec), show.legend = TRUE,inherit.aes = FALSE) +
+#   viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+#   scale_y_log10()
+# 
+# raster::values(au_bioclim) %>% 
+#   as_data_frame() %>% 
+#   drop_na() %>%
+#   ggplot() +
+#   geom_hex(aes(x = Prec_CV, y = Temp), colour="grey", fill="grey") +
+#   geom_hex(data = woody_field_traits_georef_euc_sites, aes(x = Prec_CV, y = Temp), show.legend = TRUE,inherit.aes = FALSE) +
+#   viridis::scale_fill_viridis(trans = "log10",limits=c(1,1000)) + 
+#   scale_y_log10()
+# ```
 

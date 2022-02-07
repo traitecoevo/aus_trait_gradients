@@ -27,22 +27,30 @@ devtools::load_all()
 source("R/load_climate_data_AWAP.R")
 source("R/compile_and_read_AWAP_data.R")
 source("R/load_bioclim.R")
-source("R/load_elevation.R")
-source("R/sat_slope.R")
 source("R/load_worldclim.R")
 source("R/plot_trait_by_dataset.R")
-
+source("R/load_CRU_clim.R")
+source("R/load_envirem.R")
 library(lubridate)
 library(R.utils)
+library(tidyverse)
 
 # load trait data
 austraits <- readRDS("data/austraits_develop.RDS")
 
-
 ```
 
 ```{r}
-# sum_no_NA <- function(x) if(all(is.na(x))) NA_integer_ else sum(x, na.rm=TRUE)
+sum_no_NA <- function(x) if(all(is.na(x))) NA_integer_ else sum(x, na.rm=TRUE)
+```
+
+```{r}
+##test to check if points were correclty sampled from raster
+
+# raster::plot(new_worldclim)
+# points(x=extracted_object$longitude, y=extracted_object$latitude, col=rev(terrain.colors(255))[(extracted_object$value - raster::minValue(new_worldclim))/
+#                                          (raster::maxValue(new_worldclim)- raster::minValue(new_worldclim)) * 255])
+
 ```
 
 
@@ -66,29 +74,47 @@ au_map <- raster::raster("data/australia.tif")
 Start with solar which has the highest temporal resolution (i.e. unique daily values)
 
 ```{r}
-# # Finally, extract values for solar irradiance (12, 16-27th November 2009 missing, 2014 incomplete)
-# 
-# #This function compiles extracts point values from daily spatial files and compiles these values into yearly csvs
-# # compile_daily_solar_data()
-# #This function reads yearly csvs and compiles them into a total data frame
-# read_and_combine_compiled_solar_data()
-# 
-# available_years <- c(1990:2008, 2010:2013)
-# 
-# read_csv("data/AWAP_solar/compiled_annual_solar/compiled_total_solar_data.csv") %>%
-#   filter(year %in% available_years) %>%
-#   mutate(day = as.numeric(day)) -> solar_data
+# extract values for solar irradiance (12, 16-27th November 2009 missing, 2014 incomplete)
+
+available_years <- c(1990:2008, 2010:2013)
+
+#This function compiles extracts point values from daily spatial files and compiles these values into yearly csvs
+map(available_years, compile_daily_solar_data)
+
+
+#This function reads yearly csvs and compiles them into a total data frame
+read_and_combine_compiled_solar_data()
+
+
+read_csv("data/AWAP/AWAP_solar/compiled_annual_solar/compiled_total_solar_data.csv") %>%
+  filter(year %in% available_years) %>%
+  mutate(day = as.numeric(day)) -> solar_data_daily_AWAP
 ```
 
 ```{r}
-# #all other data is on at least a monthly scale, so let's convert solar to monthly before joining all enviro variables together (Solar has daily data for 1990 - 2013)
-# 
-# solar_data_monthly <- solar_data %>%
-#   group_by(ID, year, month) %>%
-#   summarise(mean_monthly_shortwave_radiation = mean(shortwave_radiation, na.rm=T))
-# 
-# #remove the daily dataset to free up computational resources
-# rm(solar_data)
+#all other data is on at least a monthly scale, so let's convert solar to monthly before joining all enviro variables together (Solar has daily data for 1990 - 2013, except 2009 which had days missing)
+
+if(file.exists("data/AWAP/AWAP_solar/compiled_annual_solar/compiled_monthly_solar_data.csv")){
+  solar_data_monthly_AWAP<-read_csv("data/AWAP/AWAP_solar/compiled_annual_solar/compiled_monthly_solar_data.csv")
+} else{
+  solar_data_monthly_AWAP <- solar_data_daily_AWAP %>%
+  group_by(ID, year, month) %>%
+  summarise(mean_monthly_shortwave_radiation = mean(shortwave_radiation, na.rm=T)) %>%
+  ungroup()
+
+  write_csv(solar_data_monthly_AWAP,"data/AWAP/AWAP_solar/compiled_annual_solar/compiled_monthly_solar_data.csv")
+}
+
+solar_data_monthly_AWAP %>%
+  group_by(ID, year) %>%
+  summarise(mean_annual_shortwave_radiation_AWAP = mean(mean_monthly_shortwave_radiation, na.rm=T)) %>%
+  ungroup() %>%
+  group_by(ID) %>%
+  summarise(mean_annual_shortwave_radiation_AWAP = mean(mean_annual_shortwave_radiation_AWAP, na.rm=T)) -> solar_data_AWAP
+
+#remove the daily dataset to free up computational resources
+rm(solar_data_daily_AWAP)
+
 ```
 
 Next, data for which we have unique monthly data within years.
@@ -96,123 +122,189 @@ Next, data for which we have unique monthly data within years.
 Start with Australian water availability project data
 
 ```{r}
-# # First, extract values for 9am vapour pressure (hPA) #2020 incomplete
-# 
-# # compile_vp_09_data()
-# 
-# vp_09_data <- read_csv("data/agcd/v1/vapourpres_h09_monthly/mean/r005/01month/compiled_h09_data/compiled_h09_data.csv") %>%
+# Extract values for monthly totaly rainfall (mm) #2020 incomplete
+
+compile_annual_rainfall_data()
+
+annual_rainfall_data_AWAP <- read_csv("data/AWAP/agcd/v2/r005/01month/compiled_rainfall_data/compiled_rainfall_data.csv")%>%
+  select(-day) %>%
+  filter(year !="2020") %>%
+  rename(prec_AWAP = prec) %>%
+  select(-buffer_extracted) %>%
+  group_by(year, ID, latitude, longitude) %>%
+  summarise(prec_AWAP = sum_no_NA(prec_AWAP)) %>%
+  ungroup() %>%
+  group_by(ID, latitude, longitude) %>%
+  summarise(prec_AWAP = mean(prec_AWAP, na.rm=T)) %>%
+  ungroup()
+```
+
+
+```{r}
+# First, extract values for 9am vapour pressure (hPA) #2020 incomplete
+
+compile_vp_09_data()
+
+vp_09_data_AWAP <- read_csv("data/AWAP/agcd/v1/vapourpres_h09_monthly/mean/r005/01month/compiled_h09_data/compiled_h09_data.csv") %>%
+  select(-day) %>%
+  filter(year !="2020")%>%
+  rename(vp09_AWAP = vp09) %>%
+  select(-buffer_extracted)
+
+
+# vp_09_data_AWAP1 <- read_csv("data/AWAP/agcd/v1/vapourpres_h09_monthly/mean/r005/01month/compiled_h09_data/compiled_h09_data1.csv") %>%
 #   select(-day) %>%
-#   filter(year !="2020")
+#   filter(year !="2020")%>%
+#   rename(vp09_AWAP = vp09) %>%
+#   select(-buffer_extracted)
+# 
+# plot(vp_09_data_AWAP$vp09_AWAP~vp_09_data_AWAP1$vp09_AWAP)
+
 
 ```
 
 ```{r}
-# # Next, extract values for 3pm vapour pressure (hPA) #2020 incomplete
-# 
-# # compile_vp_15_data()
-# 
-# vp_15_data <- read_csv("data/agcd/v1/vapourpres_h15_monthly/compiled_h15_data/compiled_h15_data.csv") %>%
-#   select(-day)%>%
-#   filter(year !="2020")
+# Next, extract values for 3pm vapour pressure (hPA) #2020 incomplete
+
+compile_vp_15_data()
+
+vp_15_data_AWAP <- read_csv("data/AWAP/agcd/v1/vapourpres_h15_monthly/compiled_h15_data/compiled_h15_data.csv") %>%
+  select(-day)%>%
+  filter(year !="2020")%>%
+  rename(vp15_AWAP = vp15)%>%
+  select(-buffer_extracted)
 
 ```
 
 ```{r}
-# # compile_annual_rainfall_data()
-# 
-# annual_rainfall_data <- read_csv("data/agcd/v2/r005/01month/compiled_rainfall_data/compiled_rainfall_data.csv") %>%select(-day) %>%
-#   filter(year !="2020") %>%
-#   rename(prec_AWAP = prec)
+# Next, extract values for average monthly maximum temperature #2020 incomplete
+
+compile_max_T_data()
+
+max_t_data_AWAP <- read_csv("data/AWAP/agcd/v1/monthly_tmax/compiled_temperature_data/compiled_temperature_data.csv") %>%select(-day) %>%
+  filter(year !="2020") %>%
+  rename(max_t_AWAP = max_t)%>%
+  select(-buffer_extracted)
 ```
 
 ```{r}
-# # compile_max_T_data()
-# 
-# max_t_data <- read_csv("data/agcd/v1/monthly_tmax/compiled_temperature_data/compiled_temperature_data.csv") %>%select(-day) %>%
-#   filter(year !="2020")
+vpd_data_AWAP <- left_join(max_t_data_AWAP, vp_15_data_AWAP) %>%
+  left_join(vp_09_data_AWAP)
+```
+
+
+```{r}
+#add vapour pressure deficit to dataframe using formulas for saturated vapour pressure (esat; kPa) and vapour pressure deficit (VPD; kPa) in Monteith JL & Unsworth MH (1990) Principles of environmental physics
+
+es_T_star = 0.611 #kPa
+T_dash = 36.0;  #K
+T_star = 273.0; #K
+A = 17.27
+DEG_TO_KELVIN = 273.0 # convert celcius to kelvins
+hPa_to_kPA = 1/10 #vapour pressure is in hPa
+
+vpd_data_AWAP$max_t_K_AWAP<- vpd_data_AWAP$max_t_AWAP+DEG_TO_KELVIN
+
+vpd_data_AWAP$esat = es_T_star * exp(A * (vpd_data_AWAP$max_t_K_AWAP - T_star) / (vpd_data_AWAP$max_t_K_AWAP - T_dash))
+
+#convert vapour pressure to kPa
+
+vpd_data_AWAP$vp_09_kpa_AWAP <- vpd_data_AWAP$vp09_AWAP * hPa_to_kPA
+vpd_data_AWAP$vp_15_kpa_AWAP <- vpd_data_AWAP$vp15_AWAP * hPa_to_kPA
+
+#VPD is saturated vapour pressure minus vapour pressure
+
+vpd_data_AWAP$VPD_09 <- vpd_data_AWAP$esat - vpd_data_AWAP$vp_09_kpa_AWAP
+vpd_data_AWAP$VPD_15 <- vpd_data_AWAP$esat - vpd_data_AWAP$vp_15_kpa_AWAP
+```
+
+```{r}
+vpd_data_AWAP %>%
+  group_by(year, ID, latitude,longitude) %>%
+  summarise(VPD_09_AWAP = mean(VPD_09, na.rm=T),
+            VPD_15_AWAP = mean(VPD_15, na.rm=T),
+            max_t_AWAP = mean(max_t_AWAP, na.rm=T)) %>%
+  ungroup() %>%
+  group_by(ID, latitude,longitude) %>%
+  summarise(VPD_09_AWAP = mean(VPD_09_AWAP, na.rm=T),
+            VPD_15_AWAP = mean(VPD_15_AWAP, na.rm=T),
+            max_t_AWAP = mean(max_t_AWAP, na.rm=T)) %>%
+  ungroup() %>%
+  left_join(solar_data_AWAP) %>%
+  left_join(annual_rainfall_data_AWAP) -> climate_data_AWAP
 ```
 
 Now, data from CRU clim
 
 ```{r}
-# # gunzip("data/CRU/pet/cru_ts4.05.1901.2020.pet.dat.nc.gz", remove=FALSE)
-# # pet_path <- "data/CRU/pet/cru_ts4.05.1901.2020.pet.dat.nc"
-# # pet_data <- load_CRU_clim(pet_path)
-# # write_csv(pet_data, "data/CRU/pet/pet_data.csv")
-# 
-# pet_data <- read_csv("data/CRU/pet/pet_data.csv")  %>%
-#   rename(pet_CRU = value)%>%
-#   mutate(date = paste(year, month, day, sep="-")) %>%
-#   mutate(date = ymd(date)) %>%
-#   mutate(num_days = days_in_month(date)) %>%
-#   mutate(monthly_pet_CRU = pet_CRU*num_days) -> pet_data
+#CRU data sometimes needs to be unzipped using this function gunzip
+
+gunzip("data/CRU/pet/cru_ts4.05.1901.2020.pet.dat.nc.gz", remove=FALSE)
+
+pet_directory <- "data/CRU/pet/"
+pet_file <- "cru_ts4.05.1901.2020.pet.dat.nc"
+
+pet_data <- load_CRU_clim(pet_directory, pet_file)
+write_csv(pet_data, "data/CRU/pet/pet_data.csv")
+
+read_csv("data/CRU/pet/pet_data.csv")  %>%
+  rename(pet_CRU = value)%>%
+  mutate(date = paste(year, month, day, sep="-")) %>%
+  mutate(date = ymd(date)) %>%
+  mutate(num_days = days_in_month(date)) %>%
+  mutate(monthly_pet_CRU = pet_CRU*num_days) %>%
+  select(-buffer_extracted, -day) -> pet_data_CRU
 ```
 
 
 ```{r}
-# # gunzip("data/CRU/temp_avg/cru_ts4.05.1901.2020.tmp.dat.nc.gz", remove=FALSE)
-# # temp_avg_path <- "data/CRU/temp_avg/cru_ts4.05.1901.2020.tmp.dat.nc"
-# # temp_avg_data <- load_CRU_clim(temp_avg_path)
-# # write_csv(temp_avg_data, "data/CRU/temp_avg/temp_avg_data.csv")
-# 
-# temp_avg_data <- read_csv("data/CRU/temp_avg/temp_avg_data.csv") %>%
-#   rename(temp_avg_CRU = value) %>%
-#   mutate(sat_slope = sat_slope_func(temp_avg_CRU))
-```
+gunzip("data/CRU/pre/cru_ts4.05.1901.2020.pre.dat.nc.gz", remove=FALSE)
 
-```{r}
-# # gunzip("data/CRU/cloud/cru_ts4.05.1901.2020.cld.dat.nc.gz", remove=FALSE)
-# # cloud_path <- "data/CRU/cloud/cru_ts4.05.1901.2020.cld.dat.nc"
-# # cloud_data <- load_CRU_clim(cloud_path)
-# # write_csv(cloud_data, "data/CRU/cloud/cloud_data.csv")
-# 
-# cloud_data <- read_csv("data/CRU/cloud/cloud_data.csv") %>%
-#   rename(cloudiness = value)
-```
+pre_directory <- "data/CRU/pre/"
+pre_file <- "cru_ts4.05.1901.2020.pre.dat.nc"
 
+pre_data <- load_CRU_clim(pre_directory, pre_file)
+write_csv(pre_data, "data/CRU/pre/pre_data.csv")
 
-Elevation has just average values for each site, but is needed for SPLASH to calculate net radiation
-
-```{r}
-# elevation <- load_elevation()
-```
-
-```{r}
-# data_for_splash <- cloud_data %>%
-#   left_join(temp_avg_data) %>%
-#   left_join(elevation)
-# 
-# data_for_splash %>%
-#   mutate(date = paste(year, month, day, sep="-")) %>%
-#   mutate(date = ymd(date)) %>%
-#   mutate(doy = yday(date)) %>%
-#   mutate(sun_frac = (100-cloudiness)/100) -> data_for_splash
-# 
-# # write_csv(data_for_splash,"data/splash_input.csv")
-```
-
-```{r}
-# #net radiation from SPLASH
-# 
-# net_rad_paths<-paste("data/net_rad/", list.files("data/net_rad"), sep="")
-# map(net_rad_paths, read_csv) %>%
-#   bind_rows() %>%
-#   select(-sat_slope) %>%
-#   mutate(net_rad_w = net_rad/24/60/60) -> net_rad 
+pre_data_CRU <- read_csv("data/CRU/pre/pre_data.csv") %>%
+  rename(prec_CRU = value) %>%
+  select(-buffer_extracted, -day)
 ```
 
 
 ```{r}
-# left_join(data_for_splash, net_rad) %>%
-#   left_join(pet_data) %>%
-#   left_join(annual_rainfall_data) %>% 
-#   left_join(vp_09_data) %>%
-#   left_join(vp_15_data) %>%
-#   left_join(solar_data_monthly) %>%
-#   left_join(max_t_data) %>%
-#   mutate(days_in_month = lubridate::days_in_month(date)) %>%
-#   mutate(eet_day = net_rad_w*sat_slope/(sat_slope+65)/(2.45*1000000)*24*60*60) %>%
-#   mutate(eet_month = eet_day*days_in_month) -> compiled_monthly_dataset
+gunzip("data/CRU/temp_avg/cru_ts4.05.1901.2020.tmp.dat.nc.gz", remove=FALSE)
+
+temp_avg_directory <- "data/CRU/temp_avg/"
+temp_avg_file <- "cru_ts4.05.1901.2020.tmp.dat.nc"
+
+temp_avg_data <- load_CRU_clim(temp_avg_directory, temp_avg_file)
+write_csv(temp_avg_data, "data/CRU/temp_avg/temp_avg_data.csv")
+
+temp_avg_data_CRU <- read_csv("data/CRU/temp_avg/temp_avg_data.csv") %>%
+  rename(temp_avg_CRU = value) %>%
+  select(-buffer_extracted, -day)
+```
+
+```{r}
+left_join(temp_avg_data_CRU, pre_data_CRU) %>%
+  left_join(pet_data_CRU) -> climate_data_CRU
+```
+
+```{r}
+climate_data_CRU %>%
+  group_by(year, ID, latitude, longitude) %>%
+  summarise(pet_CRU = sum_no_NA(monthly_pet_CRU),
+            prec_CRU = sum_no_NA(prec_CRU),
+            temp_avg_CRU = mean(temp_avg_CRU, na.rm=T)) %>%
+  ungroup() %>%
+  mutate(MI = prec_CRU/pet_CRU) %>%
+  group_by(ID, latitude, longitude) %>%
+  summarise(pet_CRU = mean(pet_CRU,na.rm=T),
+            prec_CRU = mean(prec_CRU, na.rm=T),
+            temp_avg_CRU = mean(temp_avg_CRU, na.rm=T),
+            MI_CRU = mean(MI, na.rm=T)) %>%
+  ungroup() -> climate_data_CRU
 
 ```
 
@@ -220,148 +312,198 @@ Elevation has just average values for each site, but is needed for SPLASH to cal
 Next, prepare monthly data from the Worldclim dataset. Worldclim has monthly values averaged across years
 
 ```{r}
-# load_worldclim("data/wc2.1_2.5m_tavg/", "avg_temp_wordlclim")
-# 
-# avg_temp_data <- read_csv("data/wc2.1_2.5m_tavg/avg_temp_wordlclim.csv")
-# 
-# avg_temp_data %>%
-#   group_by(ID) %>%
-#   summarise(avg_temp_WC = mean(value, na.rm=T)) %>%
-#   drop_na() -> avg_temp_WC
-# 
-# #growing season temperature excludes months where the average monthly temperature is less than 5
-# 
-# avg_temp_data %>%
-#   filter(value > 5) %>%
-#   group_by(ID) %>%
-#   summarise(avg_gs_temp_WC = mean(value)) -> avg_growing_season_temp_WC
+load_worldclim("data/WC/wc2.1_30s_elev/", "elev_worldclim")
 
+elev_worldclim <- read_csv("data/WC/wc2.1_30s_elev/elev_worldclim.csv") %>%
+  rename(elev_WC = value)%>%
+  select(-buffer_extracted, -month)
+```
+
+
+```{r}
+load_worldclim("data/WC/wc2.1_30s_prec/", "prec_worldclim")
+
+prec_worldclim <- read_csv("data/WC/wc2.1_30s_prec/prec_worldclim.csv") %>%
+  rename(prec_WC = value)%>%
+  select(-buffer_extracted)
+```
+
+
+```{r}
+load_worldclim("data/WC/wc2.1_30s_tavg/", "avg_temp_wordlclim")
+
+avg_temp_worldclim <- read_csv("data/WC/wc2.1_30s_tavg/avg_temp_wordlclim.csv") %>%
+  rename(avg_temp_WC = value)%>%
+  select(-buffer_extracted)
 ```
 
 ```{r}
-# load_worldclim("data/wc2.1_2.5m_srad/", "solar_wordlclim")
-# 
-# solar_worldclim_data <- read_csv("data/wc2.1_2.5m_srad/solar_wordlclim.csv")
-# 
-# solar_worldclim_data %>%
-#   group_by(ID) %>%
-#   summarise(solar_WC = mean(value, na.rm=T)) %>%
-#   drop_na() -> solar_worldclim
+load_worldclim("data/WC/wc2.1_30s_srad/", "solar_wordlclim")
+
+solar_worldclim_data <- read_csv("data/WC/wc2.1_30s_srad/solar_wordlclim.csv") %>%
+  rename(solar_WC = value)%>%
+  select(-buffer_extracted)
 ```
 
 ```{r}
-# climate_data <- compiled_monthly_dataset %>%
-#   left_join(avg_temp_WC) %>%
-#   left_join(avg_growing_season_temp_WC) %>%
-#   left_join(solar_worldclim)
+load_worldclim("data/WC/wc2.1_30s_vapr/", "VP_wordlclim")
+
+VP_worldclim_data <- read_csv("data/WC/wc2.1_30s_vapr/VP_wordlclim.csv") %>%
+  rename(VP_WC = value)%>%
+  select(-buffer_extracted)
+```
+
+```{r}
+load_worldclim("data/WC/wc2.1_30s_tmax/", "tmax_wordlclim")
+
+tmax_worldclim_data <- read_csv("data/WC/wc2.1_30s_tmax/tmax_wordlclim.csv") %>%
+  rename(tmax_WC = value)%>%
+  select(-buffer_extracted)
+```
+
+
+```{r}
+vpd_data_WC <- left_join(tmax_worldclim_data, VP_worldclim_data)
 ```
 
 
 ```{r}
 # #add vapour pressure deficit to dataframe using formulas for saturated vapour pressure (esat; kPa) and vapour pressure deficit (VPD; kPa) in Monteith JL & Unsworth MH (1990) Principles of environmental physics
-# 
-# es_T_star = 0.611 #kPa
-# T_dash = 36.0;  #K
-# T_star = 273.0; #K
-# A = 17.27
-# DEG_TO_KELVIN = 273.0 # convert celcius to kelvins
-# hPa_to_kPA = 1/10 #vapour pressure is in hPa
-# 
-# climate_data$max_t_K<- climate_data$max_t+DEG_TO_KELVIN
-# 
-# climate_data$esat = es_T_star * exp(A * (climate_data$max_t_K - T_star) / (climate_data$max_t_K - T_dash))
-# 
-# #convert vapour pressure to kPa
-# 
-# climate_data$vp_09_kpa <- climate_data$vp09 * hPa_to_kPA
-# climate_data$vp_15_kpa <- climate_data$vp15 * hPa_to_kPA
-# 
-# #VPD is saturated vapour pressure minus vapour pressure
-# 
-# climate_data$VPD_09 <- climate_data$esat - climate_data$vp_09_kpa
-# climate_data$VPD_15 <- climate_data$esat - climate_data$vp_15_kpa
+#
+es_T_star = 0.611 #kPa
+T_dash = 36.0;  #K
+T_star = 273.0; #K
+A = 17.27
+DEG_TO_KELVIN = 273.0 # convert celcius to kelvins
+
+vpd_data_WC$max_t_K_WC<- vpd_data_WC$tmax_WC+DEG_TO_KELVIN
+
+vpd_data_WC$esat = es_T_star * exp(A * (vpd_data_WC$max_t_K_WC - T_star) / (vpd_data_WC$max_t_K_WC - T_dash))
+
+#VPD is saturated vapour pressure minus vapour pressure
+
+vpd_data_WC$VPD_WC <- vpd_data_WC$esat - vpd_data_WC$VP_WC
 ```
 
 ```{r}
-# #calculate a yearly value for each site, we want the sum of the monthly sums of rainfall and eet, and the average for the remaining variables
-# 
-# climate_data_yearly_summary <- climate_data %>%
-#   group_by(year, ID, longitude,latitude) %>%
-#   summarise(temp_avg_CRU = mean(temp_avg_CRU, na.rm=T),
-#             temp_avg_WC = mean(avg_temp_WC, na.rm=T),
-#             temp_avg_gs_WC = mean(avg_gs_temp_WC, na.rm=T), 
-#             eet_annual = sum_no_NA(eet_month), 
-#             VPD_09 = mean(VPD_09, na.rm=T), 
-#             VPD_15 = mean(VPD_15, na.rm=T), 
-#             annual_prec_AWAP=sum_no_NA(prec_AWAP),
-#             annual_pet_CRU=sum_no_NA(monthly_pet_CRU),
-#             mean_annual_shortwave_radiation_AWAP=mean(mean_monthly_shortwave_radiation, na.rm=T), 
-#             mean_annual_shortwave_radiation_WC = mean(solar_WC,na.rm=T)) %>%
-#   mutate(MI = annual_prec_AWAP/eet_annual)
+vpd_data_WC %>%
+  select(tmax_WC, ID, latitude, longitude, month, VPD_WC) %>%
+  left_join(solar_worldclim_data) %>%
+  left_join(avg_temp_worldclim) %>%
+  left_join(prec_worldclim) %>%
+  left_join(elev_worldclim) %>%
+  group_by(ID, latitude, longitude) %>%
+  summarise(VPD_WC = mean(VPD_WC, na.rm=T),
+            solar_WC = mean(solar_WC, na.rm=T),
+            avg_temp_WC = mean(avg_temp_WC, na.rm=T),
+            prec_WC = sum_no_NA(prec_WC),
+            tmax_WC = mean(tmax_WC, na.rm=T),
+            elev_WC = mean(elev_WC, na.rm=T))-> climate_data_WC
 
+```
+
+Also, bring in some data from the ENVIREM dataset which is derived from Worldclim data. Specifically, PET and growing degree days. 
+
+```{r}
+load_envirem("data/Envirem/Australia_current_30arcsec_geotiff_set1/","PET_ENVIREM")
+
+PET_envirem <- read_csv("data/Envirem/Australia_current_30arcsec_geotiff_set1/PET_ENVIREM.csv") %>%
+  rename(PET_envirem = value) %>%
+  select(-buffer_extracted)
 ```
 
 ```{r}
-# #set up a yearly value for each site
-# climate_data_site_level_average <- climate_data_yearly_summary %>%
-#   group_by(ID) %>%
-#   summarise(VPD_09 = mean(VPD_09, na.rm=T), 
-#             VPD_15 = mean(VPD_15, na.rm=T), 
-#             annual_prec_AWAP = mean(annual_prec_AWAP,na.rm=T),
-#             annual_pet_CRU = mean(annual_pet_CRU, na.rm=T),
-#             mean_annual_shortwave_radiation_AWAP = mean(mean_annual_shortwave_radiation_AWAP, na.rm=T),
-#              mean_annual_shortwave_radiation_WC = mean(mean_annual_shortwave_radiation_WC, na.rm=T),
-#             mean_eet_annual = mean(eet_annual,na.rm=T), 
-#             mean_MI = mean(MI, na.rm=T), 
-#             mean_temp_avg_CRU = mean(temp_avg_CRU, na.rm=T),
-#             mean_temp_avg_WC = mean(temp_avg_WC, na.rm=T),
-#             mean_temp_avg_gs_WC = mean(temp_avg_gs_WC, na.rm=T))
+load_envirem("data/Envirem/Australia_current_30arcsec_geotiff_set2/","growing_deg_day_5")
+
+GDD_5_envirem <- read_csv("data/Envirem/Australia_current_30arcsec_geotiff_set2/growing_deg_day_5.csv") %>%
+  rename(GDD_5_envirem = value) %>%
+  select(-buffer_extracted)
+```
+
+```{r}
+climate_data_WC <- left_join(climate_data_WC, PET_envirem) %>%
+  mutate(MI_WC = prec_WC/PET_envirem) %>%
+  left_join(GDD_5_envirem)
+```
+
+```{r}
+#bind wordclim data to compare temp and rainfall data to
+
+#load bioclim data
+climate_data_BC <- load_climate_data() %>%
+  select(-buffer_extracted) %>%
+  pivot_wider(names_from = key, values_from= value)
+```
+
+```{r}
+climate_data <- climate_data_AWAP %>%
+  left_join(climate_data_CRU) %>%
+  left_join(climate_data_WC) %>%
+  left_join(climate_data_BC)
 ```
 
 
 ```{r}
-# #bind wordclim data to compare temp and rainfall data to
-# 
-# #load bioclim data
-# au_bioclim <- load_climate_data()
-# 
-# au_sites_bioclim <-
-#   austraits$sites %>%
-#   filter(site_property %in% c("longitude (deg)", "latitude (deg)")) %>%
-#   spread(site_property, value) %>%
-#   rowid_to_column("ID") %>%
-#   rename(latitude = `latitude (deg)`, longitude = `longitude (deg)`) %>%
-#   mutate_at(c("latitude", "longitude"), ~suppressWarnings(as.numeric(.x))) %>%
-#   combine_occurence_climate(au_bioclim)
-
+saveRDS(climate_data, "data/climate_data.RDS")
+climate_data <- readRDS("data/climate_data.RDS")
 ```
 
 ```{r}
-# combined_climate_data <- left_join(climate_data_site_level_average, au_sites_bioclim)
-# 
-# saveRDS(combined_climate_data, "data/combined_climate_data.RDS")
+library("GGally")
+
+climate_data %>% 
+  select(starts_with(c("Prec","prec")), -Prec_CV_BC) %>%
+  ggpairs(upper=list(continuous = "points"), diag="blank") +
+  geom_abline(slope=1, intercept=0, col="red", linetype=3, size=2)
+
+climate_data %>% 
+  select(temp_avg_CRU, avg_temp_WC, Temp_BC) %>%
+  mutate(Temp_BC = Temp_BC/10) %>%
+  ggpairs(upper=list(continuous = "points"), diag="blank") +
+  geom_abline(slope=1, intercept=0, col="red", linetype=3, size=2)
+
+climate_data %>% 
+  select(starts_with("VPD")) %>%
+  ggpairs(upper=list(continuous = "points"), diag="blank") +
+  geom_abline(slope=1, intercept=0, col="red", linetype=3, size=2)
+
+climate_data %>% 
+  select(mean_annual_shortwave_radiation_AWAP, solar_WC) %>%
+  mutate(mean_annual_shortwave_radiation_AWAP = mean_annual_shortwave_radiation_AWAP * 1000) %>%
+  ggpairs(upper=list(continuous = "points"), diag="blank") +
+  geom_abline(slope=1, intercept=0, col="red", linetype=3, size=2)
+                
+climate_data %>% 
+  select(MI_CRU, MI_WC) %>%
+  ggpairs(upper=list(continuous = "points"), diag="blank") +
+  geom_abline(slope=1, intercept=0, col="red", linetype=3, size=2)
+
+climate_data %>% 
+  select(starts_with("PET")) %>%
+  ggpairs(upper=list(continuous = "points"), diag="blank") +
+  geom_abline(slope=1, intercept=0, col="red", linetype=3, size=2)
 ```
 
 ```{r}
-annual_PET_worldclim <- raster::raster("data/Australia_current_2.5arcmin_geotiff/current_2-5arcmin_annualPET.tif")
+climate_data %>% 
+  select(-ID, -latitude, -longitude, -dataset_id, -site_name) %>%
+  cor(use="pairwise.complete.obs") %>%
+  corrplot(., diag=TRUE, method = "ellipse", type="upper", order="AOE")
 
-new_annual_PET_worldclim  <- raster::projectRaster(annual_PET_worldclim, au_map) 
-    coordinates <- select(location_of_sites, longitude, latitude)
-    raster::extract(x = new_annual_PET_worldclim,  y = sp::SpatialPoints(coordinates),method = "simple") %>% 
-      as_tibble() %>% 
-      mutate(ID = location_of_sites$ID,longitude = location_of_sites$longitude, latitude = location_of_sites$latitude) %>% 
-      gather(key,value,-longitude, -latitude, -ID) %>%
-      mutate(key = str_sub(key, -2)) %>%
-      rename(month = key) -> extracted_annual_PET_worldclim
 
-combined_climate_data <- readRDS("data/combined_climate_data.RDS")
+plot(climate_data$Temp_BC~climate_data$Prec_CV_BC)
+
+plot(climate_data$VPD_09_AWAP~climate_data$prec_AWAP, log = "xy")
+
 ```
+
 
 ```{r}
 traits <- austraits$traits %>%
+  left_join(location_of_sites) %>%
   filter(trait_name %in% c("leaf_area","leaf_dry_mass","specific_leaf_area","leaf_N_per_dry_mass","leaf_N_per_area","ci_over_ca","wood_density","plant_height", "seed_mass", "leaf_delta13C","huber_value")) %>%
   mutate(value = as.numeric(value)) %>%
-  left_join(combined_climate_data)
+  left_join(climate_data)
 ```
 
 
@@ -396,7 +538,7 @@ Create a new trait dataframe to only include observations with associated latitu
 ```{r}
 field_traits_georef <- 
   field_traits %>%
-  drop_na(lat,lon)
+  drop_na(latitude,longitude)
 ```
 
 ```{r}
@@ -434,6 +576,8 @@ woody_field_traits_georef <-
   field_traits_georef %>%
   filter(taxon_name %in% woody_taxa$taxon_name)
 ```
+
+Go through and remove families which were recorded as woody but either aren't woody or do not have a tree/shrub-like growth form, e.g. grass,sedges, palms, ferns
 
 ```{r include=FALSE}
 ferns_species <-
@@ -793,9 +937,9 @@ and biochemical components of carbon isotope discrimination, respectively (Wang 
 ``` {r}
 woody_field_traits_georef_tree_form %>% 
   filter(trait_name %in% c("ci_over_ca", "leaf_delta13C")) %>%
-  select(trait_name, value, observation_id, taxon_name,dataset_id,site_name, context_name, date) %>%
+  select(trait_name, value, observation_id, taxon_name,dataset_id,site_name, context_name, date, ID) %>%
   mutate(value = as.numeric(value)) %>%
-  group_by(trait_name, observation_id, taxon_name, dataset_id, site_name, context_name, date) %>%
+  group_by(trait_name, observation_id, taxon_name, dataset_id, site_name, context_name, date, ID) %>%
   summarise(value = mean(value)) %>%
   ungroup() %>%
   spread(key = trait_name, value = value)%>%
@@ -805,11 +949,11 @@ woody_field_traits_georef_tree_form %>%
 
 calculated_data %>%
   select(observation_id, taxon_name, dataset_id, site_name, context_name, date, 
-         ci_over_ca_combined) %>%
+         ci_over_ca_combined, ID) %>%
   filter(!is.na(ci_over_ca_combined)) %>%
   mutate(units = "unitless",
          trait_name = "ci_over_ca_calc",
-         value = as.character(ci_over_ca_combined)) %>%
+         value = as.numeric(ci_over_ca_combined)) %>%
   select(-ci_over_ca_combined) -> ci_over_ca_calculated
 
 ```
@@ -836,18 +980,15 @@ calculated_data %>%
 
 Bind cliamte data to the summarised data frame
 ```{r}
-extracted_annual_PET_worldclim <- extracted_annual_PET_worldclim %>% select(ID, value) %>%
-  rename(PET_WC = value)
-
 woody_field_traits_georef_tree_form %>%
   bind_rows(leaf_N_per_area_calcuated) %>%
   bind_rows(leaf_area_calcuated) %>%
   bind_rows(specific_leaf_area_calcuated) %>%
+  bind_rows(ci_over_ca_calculated) %>%
   group_by(site_name, taxon_name, dataset_id, trait_name, ID) %>%
   summarise(value=mean(value, na.rm=T)) %>%
   ungroup() %>%
-  left_join(combined_climate_data) %>%
-  left_join(extracted_annual_PET_worldclim)-> woody_field_traits_georef_tree_form_climate
+  left_join(climate_data)-> woody_field_traits_georef_tree_form_climate
 ```
 
 We will now inspect distribution of data in each study relative to total distribution to see if there is any erroneous data now that data has been averaged
@@ -866,184 +1007,258 @@ purrr::map(dataset_index_leaf_area$dataset_id, plot_trait_by_dataset_site_level,
 purrr::map(traits_to_inspect$trait_name, trait_by_dataset_core_traits)
 ```
 
-
-
-```{r}
-# library(sf)
-# library(rgeos)
-# library("ggspatial")
-# library("rnaturalearth")
-# library("rnaturalearthdata")
-# 
-# world <- ne_countries(scale = "medium", returnclass = "sf")
-
-# gene world map
-```
-
-
-```{r, fig.height==15, fig.width=15}
-# ggplot(data = world) +
-#   geom_sf() +
-#   labs( x = "Longitude", y = "Latitude") +
-#   coord_sf(xlim = c(100.00, 160.00), ylim = c(-45.00, -10.00)) +
-#   annotation_scale(location = "bl", width_hint = 0.5) +
-#   annotation_north_arrow(location = "bl", which_north = "true", 
-#                          pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"),
-#                          style = north_arrow_fancy_orienteering) +
-#   geom_point(data=woody_field_traits_georef_core_traits, aes(x=lon, y=lat, colour=annual_prec)) +
-#   theme_bw() +
-  # facet_wrap(~trait_name)
-```
-
-
-```{r, fig.height==15, fig.width=15}
-# ggplot(data = world) +
-#   geom_sf() +
-#   labs( x = "Longitude", y = "Latitude") +
-#   coord_sf(xlim = c(100.00, 160.00), ylim = c(-45.00, -10.00)) +
-#   annotation_scale(location = "bl", width_hint = 0.5) +
-#   annotation_north_arrow(location = "bl", which_north = "true", 
-#                          pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"),
-#                          style = north_arrow_fancy_orienteering) +
-#   geom_point(data=woody_field_traits_georef_core_traits, aes(x=lon, y=lat, colour=mean_annual_shortwave_radiation)) +
-#   theme_bw()+
-#   facet_wrap(~trait_name)
-```
-
-
-```{r, fig.height==15, fig.width=15}
-# ggplot(data = world) +
-#   geom_sf() +
-#   labs( x = "Longitude", y = "Latitude") +
-#   coord_sf(xlim = c(100.00, 160.00), ylim = c(-45.00, -10.00)) +
-#   annotation_scale(location = "bl", width_hint = 0.5) +
-#   annotation_north_arrow(location = "bl", which_north = "true", 
-#                          pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"),
-#                          style = north_arrow_fancy_orienteering) +
-#   geom_point(data=woody_field_traits_georef_core_traits, aes(x=lon, y=lat, colour=max_t)) +
-#   theme_bw()+
-#   facet_wrap(~trait_name)
-```
-
-
-```{r, fig.height==15, fig.width=15}
-# ggplot(data = world) +
-#   geom_sf() +
-#   labs( x = "Longitude", y = "Latitude") +
-#   coord_sf(xlim = c(100.00, 160.00), ylim = c(-45.00, -10.00)) +
-#   annotation_scale(location = "bl", width_hint = 0.5) +
-#   annotation_north_arrow(location = "bl", which_north = "true", 
-#                          pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"),
-#                          style = north_arrow_fancy_orienteering) +
-#   geom_point(data=woody_field_traits_georef_core_traits, aes(x=lon, y=lat, colour=VPD_15)) +
-#   theme_bw()+
-#   facet_wrap(~trait_name)
-
-```
-
 Basic patterns with environment
 
 ```{r}
 
-core_traits <- c("huber_value","ci_over_ca","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height","leaf_area_calc")
+core_traits <- c("huber_value","ci_over_ca_calc","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height","leaf_area_calc","seed_mass")
 
 ```
 
 ```{r, fig.width=10}
-library("wesanderson")
-pal<-wesanderson::wes_palette("Darjeeling1", 5)
 
-trait_names <- tibble(trait_name = core_traits,
-                      trait = c("huber","ci:ca","leaf_N", "SLA", "Wood_dens", "height", "leaf_area"))
-
+filter_function <- function(traits_function){
 woody_field_traits_georef_tree_form_climate %>%
   filter(trait_name %in% core_traits) %>%
-  left_join(by="trait_name", trait_names) %>%
-  select(trait, value, Temp = mean_temp_avg_CRU, VPD = VPD_15, PAR = mean_annual_shortwave_radiation_AWAP, MI = mean_MI, Prec_CV = Prec_CV_BC) %>%
-  pivot_longer(-c("trait", "value"), names_to = "env", values_to = "env_value") %>%
-  mutate(env = factor(env, levels = c("MI", "Temp", "VPD","PAR","Prec_CV"))) ->data_for_plot
+  distinct(dataset_id, .keep_all=TRUE) %>%
+select(starts_with(c("prec_WC", "GDD_5_envirem","solar_WC","VPD_WC","MI_WC","avg_temp","elev"))) -> data
+
+cor(data, use="pairwise.complete.obs")
+}
+library(purrr)
+
+purrr::map(core_traits, filter_function)
+
+```
+
+```{r}
+png("output/four_panel_test.png", height=1300, width=2000, res=250)
+
+core_traits <- c("plant_height","specific_leaf_area_calc","seed_mass","wood_density")
+
+sub_labels <- tibble(trait_name = core_traits, label = paste(c("a","c","b","d"),")",sep=""))
+
+woody_field_traits_georef_tree_form_climate%>%
+    filter(trait_name %in% core_traits) %>%
+    select(trait_name, value, prec = prec_WC)%>%
+    pivot_longer(-c("trait_name", "value"), names_to = "env", values_to = "env_value")%>%
+  left_join(sub_labels) %>%
+    mutate(env = factor(env, levels = c("prec"),labels =  c("MAP~(mm~yr^{-1})")))%>%
+  mutate(trait_name = factor(trait_name, levels = core_traits,labels =  c("Height~at~maturation~(m)","Specific~leaf~area~(mg~mm^{-2})","Seed~mass~(mg)","Wood~density")))%>%
+  ggplot(aes(env_value, value,group = trait_name)) +
+  geom_point() + 
+  scale_y_log10() +
+  scale_x_log10() + 
+  theme_bw() + 
+    facet_wrap(~trait_name, scales = "free",labeller = label_parsed, drop=TRUE, strip.position ="left") + 
+  theme(axis.title.y=element_blank())+
+  theme(strip.text.x = element_text(size = 6), strip.text.y = element_text(size = 12), axis.text=element_text(size=11)) +
+  xlab(expression(MAP~(mm~yr^{-1}))) + 
+  theme(strip.placement = "outside") +
+  theme(strip.background = element_rect(fill = "white", colour = "white")) +
+    geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
+              vjust="inward",hjust=-0.25,
+              inherit.aes = FALSE, check_overlap = TRUE, size=4)
+
+dev.off()
+```
 
 
-png("output/trait_by_environment_viridis_high_res_small_axes.png", height=1200, width=2000, res=300)
+```{r}
+
+png("output/cow_plot_test.png", height=6000, width=5000, res=300)
+
+plot_figure_1("leaf_N_per_area_calc","Leaf N per area (mg/mm2)",woody_field_traits_georef_tree_form_climate, 1) -> a
+
+plot_figure_1("huber_value","Huber value",woody_field_traits_georef_tree_form_climate, 2) -> b
+
+plot_figure_1("leaf_area_calc","Leaf area (mm2)",woody_field_traits_georef_tree_form_climate, 3) -> c
+
+plot_figure_1("specific_leaf_area_calc","Specific leaf area (mg/mm2)",woody_field_traits_georef_tree_form_climate, 4) -> d
+
+plot_figure_1("plant_height","Plant height (m)",woody_field_traits_georef_tree_form_climate, 4) -> e
+
+plot_figure_1("ci_over_ca_calc","ci_ca",woody_field_traits_georef_tree_form_climate, 5) -> f
+
+plot_figure_1("seed_mass","Seed mass (g)",woody_field_traits_georef_tree_form_climate, 6) -> g
+
+plot_figure_1("wood_density","Wood density",woody_field_traits_georef_tree_form_climate, 7) -> h
+
+cowplot::plot_grid(a/b/c/d/e/f/g/h)
+
+dev.off()
+```
+
+```{r}
+png("output/facet_wrap_test.png", height=2600, width=2600, res=300)
+
+
+trait_names <- tibble(trait_name = core_traits,
+                      trait = c("huber","ci:ca","leaf_N", "SLA", "Wood_dens", "height", "leaf_area","seed_mass"))
+
+woody_field_traits_georef_tree_form_climate%>%
+    filter(trait_name %in% core_traits) %>%
+    left_join(by="trait_name", trait_names)%>%
+    select(trait, value, Temp = avg_temp_WC, VPD = VPD_WC, PAR = solar_WC,elev = elev_WC, prec = prec_WC) %>%
+    pivot_longer(-c("trait", "value"), names_to = "env", values_to = "env_value") %>%
+    mutate(env = factor(env, levels = c("Temp","VPD","PAR","elev","prec"),labels=c("MAT ~(degree*C)","VPD~(kPa)","PAR (kJ~m^{-2}~day^{-1})","Elevation~(m)","MAP~(mm~yr^{-1})"))) %>%
+    left_join(sub_labels) %>% 
+    mutate(env = factor(env, levels = c("MAT ~(degree*C)","VPD~(kPa)","PAR (kJ~m^{-2}~day^{-1})","Elevation~(m)","MAP~(mm~yr^{-1})"))) ->data_for_plot
+
+data_for_plot %>%
+  mutate(keep = case_when(
+    trait %in% c("huber", "leaf_N") & env %in% c("MAT ~(degree*C)","VPD~(kPa)","PAR (kJ~m^{-2}~day^{-1})","Elevation~(m)") ~ "keep",
+  trait == "ci:ca" & env %in% c("MAT ~(degree*C)","VPD~(kPa)","Elevation~(m)") ~ "keep",
+  trait == "leaf_area" & env %in% c("MAT ~(degree*C)","VPD~(kPa)","PAR (kJ~m^{-2}~day^{-1})") ~ "keep",
+  trait %in% c("SLA","Wood_dens","height","seed_mass") & env %in% c("MAP~(mm~yr^{-1})") ~ "keep")) %>%
+  filter(!is.na(keep))%>% 
+  ggplot(aes(env_value, value,group = trait)) +
+  geom_point() + 
+  scale_y_log10() +
+  scale_x_log10() + 
+  theme_bw() + 
+    facet_wrap(trait~env, scales = "free",labeller = label_parsed, drop=TRUE, ncol=4, strip.position = "top") + 
+  theme(axis.title.x=element_blank())+
+  theme(axis.title.y=element_blank())+
+  theme(strip.text.x = element_text(size = 6), strip.text.y = element_text(size = 6), axis.text=element_text(size=7))
+
+dev.off()
+```
+
+```{r}
+png("output/facet_grid_test.png", height=2600, width=2600, res=300)
+
+
+trait_names <- tibble(trait_name = core_traits,
+                      trait = c("huber","ci:ca","leaf_N", "SLA", "Wood_dens", "height", "leaf_area","seed_mass"))
+
+woody_field_traits_georef_tree_form_climate%>%
+    filter(trait_name %in% core_traits) %>%
+    left_join(by="trait_name", trait_names)%>%
+    select(trait, value, Temp = avg_temp_WC, VPD = VPD_WC, PAR = solar_WC,elev = elev_WC, prec = prec_WC) %>%
+    pivot_longer(-c("trait", "value"), names_to = "env", values_to = "env_value") %>%
+    mutate(env = factor(env, levels = c("Temp","VPD","PAR","elev","prec"),labels=c("MAT ~(degree*C)","VPD~(kPa)","PAR (kJ~m^{-2}~day^{-1})","Elevation~(m)","MAP~(mm~yr^{-1})"))) %>%
+    left_join(sub_labels) %>% 
+    mutate(env = factor(env, levels = c("MAT ~(degree*C)","VPD~(kPa)","PAR (kJ~m^{-2}~day^{-1})","Elevation~(m)","MAP~(mm~yr^{-1})"))) ->data_for_plot
+
+data_for_plot %>%
+  mutate(keep = case_when(
+    trait %in% c("huber", "leaf_N") & env %in% c("MAT ~(degree*C)","VPD~(kPa)","PAR (kJ~m^{-2}~day^{-1})","Elevation~(m)") ~ "keep",
+  trait == "ci:ca" & env %in% c("MAT ~(degree*C)","VPD~(kPa)","Elevation~(m)") ~ "keep",
+  trait == "leaf_area" & env %in% c("MAT ~(degree*C)","VPD~(kPa)","PAR (kJ~m^{-2}~day^{-1})") ~ "keep",
+  trait %in% c("SLA","Wood_dens","height","seed_mass") & env %in% c("MAP~(mm~yr^{-1})") ~ "keep")) %>%
+  mutate(value = ifelse(keep == "keep", value, NA_real_)) %>%
+  mutate(annotation = ifelse(is.na(keep), "No prediction", "")) %>%
+  ggplot(aes(env_value, value,group = trait)) +
+  geom_point() + 
+  scale_y_log10() +
+  scale_x_log10() + 
+  theme_bw() + 
+    facet_grid(trait~env, scales = "free",labeller = label_parsed, drop=TRUE) + 
+  theme(axis.title.x=element_blank())+
+  theme(axis.title.y=element_blank())+
+  theme(strip.text.x = element_text(size = 6), strip.text.y = element_text(size = 6), axis.text=element_text(size=7)) +
+  geom_text(aes(label=annotation,x=Inf, y=Inf), hjust=1.35,vjust=4.5)
+
+dev.off()
+```
+
+
+```{r, fig.width=10}
+trait_names <- tibble(trait_name = core_traits,
+                      trait = c("huber","ci:ca","leaf_N", "SLA", "Wood_dens", "height", "leaf_area","seed_mass"))
+
+woody_field_traits_georef_tree_form_climate%>%
+    filter(trait_name %in% core_traits) %>%
+    left_join(by="trait_name", trait_names)%>%
+    select(trait, value, Temp = avg_temp_WC, VPD = VPD_WC, PAR = solar_WC,elev = elev_WC, prec = prec_WC) %>%
+    pivot_longer(-c("trait", "value"), names_to = "env", values_to = "env_value") %>%
+    mutate(env = factor(env, levels = c("Temp","VPD","PAR","elev","prec"),labels=c("MAT ~(degree*C)","VPD~(kPa)","PAR (kJ~m^{-2}~day^{-1})","Elevation~(m)","MAP~(mm~yr^{-1})"))) %>%
+    left_join(sub_labels) %>% 
+    mutate(env = factor(env, levels = c("MAT ~(degree*C)","VPD~(kPa)","PAR (kJ~m^{-2}~day^{-1})","Elevation~(m)","MAP~(mm~yr^{-1})"))) ->data_for_plot
+
+data_for_plot %>%
+  mutate(keep = case_when(
+    trait == "huber" & env %in% c("MAT ~(degree*C)","VPD~(kPa)","PAR (kJ~m^{-2}~day^{-1})","Elevation~(m)") ~ "keep")) %>%
+  filter(!is.na(keep))%>% 
+  ggplot(aes(env_value, value,group = trait)) +
+  geom_hex() + 
+  scale_y_log10() +
+  scale_x_log10() + 
+  theme_bw() + 
+  facet_wrap(trait ~ env, scales = "free", drop=TRUE) +
+  theme(axis.title.x=element_blank())+
+  theme(axis.title.y=element_blank()) +
+  theme(strip.text.x = element_text(size = 6), strip.text.y = element_text(size = 6), axis.text=element_text(size=7))
+
+
+```
+
+```{r}
+data_for_plot %>%
+  filter(!(env == "Temp" & trait == "huber"))%>% 
+  ggplot(aes(env_value, value, col = trait)) + geom_point(alpha = 0.3, shape=16, stroke=0, show.legend = F) + scale_y_log10()   +scale_x_log10()+ theme_classic() + facet_wrap(trait ~ env, scales = "free", drop=TRUE)+ scale_colour_viridis(discrete = TRUE) +theme(axis.title.x=element_blank()) +theme(axis.title.y=element_blank()) +
+  theme(strip.text.x = element_text(size = 6), strip.text.y = element_text(size = 6), axis.text=element_text(size=7))
+```
+
+
+
+```{r, fig.width=10}
+png("output/trait_by_environment_viridis_high_res_small_axes.png", height=1200, width=2600, res=300)
 data_for_plot %>% 
   ggplot(aes(env_value, value, col = trait)) + geom_point(alpha = 0.3, shape=16, stroke=0, show.legend = F) + scale_y_log10()   +scale_x_log10()+ theme_classic() + facet_grid(trait ~ env, scales = "free")+ scale_colour_viridis(discrete = TRUE) +theme(axis.title.x=element_blank()) +theme(axis.title.y=element_blank()) +
   theme(strip.text.x = element_text(size = 6), strip.text.y = element_text(size = 6), axis.text=element_text(size=7))
 dev.off()
+```
 
+Correlation plot using ellipses
+
+```{r}
 woody_field_traits_georef_tree_form_climate %>%
-  filter(trait_name %in% c("leaf_N_per_area_calc")) -> leaf_n_data
+  filter(trait_name %in% core_traits) %>%
+  left_join(by="trait_name", trait_names) %>%
+  select(trait, value, Temp = avg_temp_WC, Max_Temp = max_temp_BC, GDD_5 = GDD_5_envirem, VPD = VPD_WC, PAR = solar_WC, Prec = prec_WC, PET = PET_envirem, MI = MI_WC, Prec_CV = Prec_CV_BC, elev = elev_WC,latitude,site_name, taxon_name, dataset_id, ID) %>%
+  pivot_wider(values_from = value, names_from = trait) -> woody_field_traits_georef_tree_form_climate_wide
+
+woody_field_traits_georef_tree_form_climate_wide %>%
+  select(-c(,site_name, taxon_name, dataset_id, ID)) -> for_corrplot
+trait_env_correlation<- cor(for_corrplot, use="pairwise.complete.obs")
+corrplot::corrplot(trait_env_correlation[12:19,1:11], method="ellipse")
+```
+
+Leaf area analyses
+
+```{r}
+woody_field_traits_georef_tree_form_climate_wide%>%
+mutate(aridity = case_when(MI < 0.5 ~ "MI < 0.5",
+                           MI > 0.5 & MI < 1.5~"0.5 < MI < 1.5", 
+                           MI > 1.5 ~ "MI > 1.5")) -> woody_field_traits_georef_tree_form_climate_wide
+
+
+#assess correlation in each aridity group
+correlation_aridity <- function(aridity_class){
+  woody_field_traits_georef_tree_form_climate_wide %>%
+    filter(aridity == aridity_class) -> woody_field_traits_georef_tree_form_climate_wide_for_function
+  cor(x=woody_field_traits_georef_tree_form_climate_wide_for_function$leaf_area,y=woody_field_traits_georef_tree_form_climate_wide_for_function$latitude, use="pairwise.complete.obs")
+}
   
-fit<-(lm(log(value)~mean_MI+mean_temp_avg_CRU+VPD_15, leaf_n_data))
-fit1<-(lm(log(value)~mean_temp_avg_CRU+VPD_15+mean_annual_shortwave_radiation_AWAP, leaf_n_data))
-fit2<-(lm(log(value)~mean_MI+VPD_15+mean_annual_shortwave_radiation_AWAP, leaf_n_data))
-fit3<-(lm(log(value)~mean_MI+mean_temp_avg_CRU+mean_annual_shortwave_radiation_AWAP, leaf_n_data))
-fit4<-(lm(log(value)~mean_MI, leaf_n_data))
-
-resid <- resid(fit)
-resid1 <- resid(fit1)
-resid2 <- resid(fit2)
-resid3 <- resid(fit3)
-resid4 <- resid(fit4)
-
-visreg
-
-visreg:::setupV
-visreg:::getXY
-visreg:::setupD
-visreg:::Response
-visreg:::visregResid
-visreg:::visregPred
+correlation_coefficients<-purrr::map(unique(woody_field_traits_georef_tree_form_climate_wide$aridity)[c(2,3,1)], correlation_aridity)
+correlation_coefficients <- tibble(correlation_values = paste("r = ",round(unlist(correlation_coefficients),2), sep=""), aridity = c("MI < 0.5", "0.5 < MI < 1.5", "MI > 1.5"))
+woody_field_traits_georef_tree_form_climate_wide%>%
+  drop_na(aridity) %>%  
+  left_join(correlation_coefficients) %>%
+  mutate(aridity = factor(aridity, levels = c("MI < 0.5", "0.5 < MI < 1.5", "MI > 1.5"))) %>%
+  ggplot() +
+  geom_point(aes(x=latitude, y=leaf_area), shape=17, size=2.5, colour="gray40") +
+  facet_wrap(~aridity) +
+  scale_y_log10() +
+  theme_classic() +
+  xlab("Latitude") +
+  ylab("Leaf area")+
+  theme(strip.background = element_blank(), strip.text = element_blank()) +
+  geom_text(mapping = aes(x = -Inf, y = Inf, label = aridity),hjust=-0.2,  vjust   = 1, colour="black", size=6)+ theme(panel.spacing = unit(2, "lines")) +
+  geom_text(mapping = aes(x = Inf, y = Inf, label = correlation_values),hjust=1,  vjust   = 1, colour="black", size=6)+ theme(panel.spacing = unit(2, "lines")) +
+  theme(axis.title = element_text(size=15), axis.text = element_text(size = 12))
 
 
-rr <- residuals(fit)
-nr <- length(rr)
-
-a<-visreg(fit, "mean_MI")
-b<-visreg(fit, "mean_temp_avg_CRU")
-c<-visreg(fit, "mean_annual_shortwave_radiation_AWAP")
-d<-visreg(fit, "VPD_15")
-
-tibble(a=a$res$visregRes, b=b$res$visregRes)
-
-predict(fit, type="terms") -> terms
-rowSums(terms[,c(2,3)]) -> terms_rowSums
-(terms_rowSums + resid(fit)) -> partial_resid
-
-
-partial_resid_comparison = tibble(manual_partial_resid=rep(NA, nrow(terms)), visreg_partial_resid=rep(NA, nrow(terms)))
-
-for(i in 1:nrow(terms)){
-manual_partial_resid<- coef(fit) %*% c(1, leaf_n_data$mean_MI[i], median(leaf_n_data$mean_temp_avg_CRU),median(leaf_n_data$VPD_15)) +partial_resid[i]
-
-partial_resid_comparison$visreg_partial_resid[i] <- a$res$visregRes [i]
-partial_resid_comparison$manual_partial_resid[i] <- manual_partial_resid
-}
-plot(partial_resid_comparison$visreg_partial_resid~partial_resid_comparison$manual_partial_resid)
-
-
-rowSums(terms[,c(2,3)]) -> terms_rowSums
-(terms_rowSums + resid(fit))[1] -> partial_resid
-manual_partial_resid<- coef(fit) %*% c(1, leaf_n_data$mean_MI[1], mean(leaf_n_data$mean_temp_avg_CRU),mean(leaf_n_data$VPD_15)) +partial_resid
-
-partial_resid_comparison$visreg_partial_resid[i] <- $res$visregRes [1]
-partial_resid_comparison$manual_partial_resid[i] <- manual_partial_resid
-}
-partial_resid_comparison
-
-partial.residuals <- apply(pterms,2,function(x)x+resid(fit))
-# create our own termplot of partial residuals
-par(mfrow=c(2,2))
-# the model in lm.cars includes the response in first column, so we index with i + 1
-for(i in 1:3){
-  plot(x=fit$model[,(i+1)],y=partial.residuals[,i], col="purple")
-  abline(lm(partial.residuals[,i] ~ fit$model[,(i+1)]), col="red")
-}
-partial.residuals()
-?pterms
-
-pterms <- predict(fit, type="terms")
-partial.residuals <- apply(pterms,2,function(x)x+resid(fit))
-a$res$visregPos
-
-coef(fit) %*% c(1, leaf_n_data$mean_MI[1]-mean(leaf_n_data$mean_MI), mean(leaf_n_data$mean_temp_avg_CRU),mean(leaf_n_data$VPD_15))
 ```

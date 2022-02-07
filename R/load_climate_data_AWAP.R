@@ -4,7 +4,7 @@ load_vp09_data <- function(path){
   new_VP09 <-
     raster::projectRaster(vp09, au_map) # harmonize the spatial extent and projection
   coordinates <- dplyr::select(location_of_sites, longitude, latitude)
-  raster::extract(x = new_VP09,  y = sp::SpatialPoints(coordinates),method = "simple") %>% 
+  raster::extract(x = new_VP09,  y = sp::SpatialPoints(coordinates, proj4string=raster::crs(au_map)),method = "simple") %>% 
     as_tibble() %>% 
     mutate(ID = location_of_sites$ID,longitude = location_of_sites$longitude, latitude = location_of_sites$latitude) %>% 
     gather(key,value,-longitude, -latitude, -ID) -> extracted_object
@@ -19,7 +19,7 @@ load_vp09_data <- function(path){
 
 iterate_buffer <- function(layer){
   i = layer
-  raster::extract(x = new_VP09[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates), buffer = 5000, fun = mean, na.rm=T) %>%
+  raster::extract(x = new_VP09[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates, proj4string=raster::crs(au_map)), buffer = 5000, fun = mean, na.rm=T) %>%
     as_tibble() %>%
     mutate(key = names(new_VP09[[i]]), latitude = extracted_object_NA$latitude,longitude = extracted_object_NA$longitude, ID = extracted_object_NA$ID, buffer_extracted = "yes")
 }
@@ -39,7 +39,7 @@ load_vp15_data <- function(path){
   new_VP15 <-
     raster::projectRaster(vp15, au_map) # harmonize the spatial extent and projection
   coordinates <- select(location_of_sites, longitude, latitude)
-  raster::extract(x = new_VP15,  y = sp::SpatialPoints(coordinates),method = "simple") %>% 
+  raster::extract(x = new_VP15,  y = sp::SpatialPoints(coordinates, proj4string=raster::crs(au_map)),method = "simple") %>% 
     as_tibble() %>% 
     mutate(ID = location_of_sites$ID,longitude = location_of_sites$longitude, latitude = location_of_sites$latitude) %>% 
     gather(key,value,-longitude, -latitude, -ID) -> extracted_object
@@ -54,7 +54,7 @@ load_vp15_data <- function(path){
   
   iterate_buffer <- function(layer){
     i = layer
-    raster::extract(x = new_VP15[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates), buffer = 5000, fun = mean, na.rm=T) %>%
+    raster::extract(x = new_VP15[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates, proj4string=raster::crs(au_map)), buffer = 5000, fun = mean, na.rm=T) %>%
       as_tibble() %>%
       mutate(key = names(new_VP15[[i]]), latitude = extracted_object_NA$latitude,longitude = extracted_object_NA$longitude, ID = extracted_object_NA$ID, buffer_extracted = "yes")
   }
@@ -74,7 +74,7 @@ load_max_t_data <- function(path){
   new_max_t <-
     raster::projectRaster(max_t, au_map) # harmonize the spatial extent and projection
   coordinates <- select(location_of_sites, longitude, latitude)
-  raster::extract(x = new_max_t,  y = sp::SpatialPoints(coordinates),method = "simple") %>%
+  raster::extract(x = new_max_t,  y = sp::SpatialPoints(coordinates, proj4string=raster::crs(au_map)),method = "simple") %>%
     as_tibble() %>%
     mutate(ID = location_of_sites$ID,longitude = location_of_sites$longitude, latitude = location_of_sites$latitude) %>%
     gather(key,value,-longitude, -latitude, -ID)  -> extracted_object
@@ -89,7 +89,7 @@ load_max_t_data <- function(path){
   
   iterate_buffer <- function(layer){
     i = layer
-    raster::extract(x = new_max_t[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates), buffer = 5000, fun = mean, na.rm=T) %>%
+    raster::extract(x = new_max_t[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates, proj4string=raster::crs(au_map)), buffer = 5000, fun = mean, na.rm=T) %>%
       as_tibble() %>%
       mutate(key = names(new_max_t[[i]]), latitude = extracted_object_NA$latitude,longitude = extracted_object_NA$longitude, ID = extracted_object_NA$ID, buffer_extracted = "yes")
   }
@@ -106,14 +106,14 @@ load_max_t_data <- function(path){
 load_solar_data <- function(path){
   solar_path <- paste0("data/AWAP/AWAP_solar/", path)
   solar<-raster::stack(solar_path)
-  raster::crs(solar) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
+  raster::crs(solar) <- raster::crs(au_map)
   new_solar <-
     raster::projectRaster(solar, au_map) # harmonize the spatial extent and projection
   coordinates <- select(location_of_sites, longitude, latitude)
-  raster::extract(x = new_solar,  y = sp::SpatialPoints(coordinates),method = "simple") %>%
+  raster::extract(x = new_solar,  y = sp::SpatialPoints(coordinates, proj4string=raster::crs(au_map)),method = "simple") %>%
     as_tibble() %>%
     mutate(ID = location_of_sites$ID,longitude = location_of_sites$longitude, latitude = location_of_sites$latitude, key = new_solar@data@names) -> extracted_object
-  
+
   extracted_object %>%
     filter(is.na(value))%>%
     distinct(ID, .keep_all = T) -> extracted_object_NA
@@ -124,7 +124,7 @@ load_solar_data <- function(path){
   
   iterate_buffer <- function(layer){
     i = layer
-    raster::extract(x = new_solar[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates), buffer = 5000, fun = mean, na.rm=T) %>%
+    raster::extract(x = new_solar[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates, proj4string=raster::crs(au_map)), buffer = 5000, fun = mean, na.rm=T) %>%
       as_tibble() %>%
       mutate(key = names(new_solar[[i]]), latitude = extracted_object_NA$latitude,longitude = extracted_object_NA$longitude, ID = extracted_object_NA$ID, buffer_extracted = "yes")
   }
@@ -144,7 +144,7 @@ load_rainfal_data <- function(path){
   new_rainfall <-
     raster::projectRaster(rainfall, au_map) # harmonize the spatial extent and projection
   coordinates <- select(location_of_sites, longitude, latitude)
-  raster::extract(x = new_rainfall,  y = sp::SpatialPoints(coordinates),method = "simple") %>% 
+  raster::extract(x = new_rainfall,  y = sp::SpatialPoints(coordinates, proj4string=raster::crs(au_map)),method = "simple") %>% 
     as_tibble() %>% 
     mutate(ID = location_of_sites$ID,longitude = location_of_sites$longitude, latitude = location_of_sites$latitude) %>% 
     gather(key,value,-longitude, -latitude, -ID)-> extracted_object
@@ -159,7 +159,7 @@ load_rainfal_data <- function(path){
   
   iterate_buffer <- function(layer){
     i = layer
-    raster::extract(x = new_rainfall[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates), buffer = 5000, fun = mean, na.rm=T) %>%
+    raster::extract(x = new_rainfall[[i]],  y = sp::SpatialPoints(extracted_object_NA_coordinates, proj4string=raster::crs(au_map)), buffer = 5000, fun = mean, na.rm=T) %>%
       as_tibble() %>%
       mutate(key = names(new_rainfall[[i]]), latitude = extracted_object_NA$latitude,longitude = extracted_object_NA$longitude, ID = extracted_object_NA$ID, buffer_extracted = "yes")
   }
