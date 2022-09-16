@@ -1,4 +1,4 @@
----
+0---
 title: Report on data in AusTraits
 output:
   html_document:
@@ -23,9 +23,11 @@ Load data
 # Load packages and functions for this analysis
 
 rm(list=ls())
-devtools::load_all()
+# devtools::load_all(quiet = TRUE)
+source("R/calc_c13_a.R")
 source("R/load_climate_data_AWAP.R")
 source("R/compile_and_read_AWAP_data.R")
+source("R/error_checking_function.R")
 source("R/load_bioclim.R")
 source("R/load_worldclim.R")
 source("R/plot_trait_by_dataset.R")
@@ -41,21 +43,17 @@ library(tidyverse)
 # load trait data
 austraits <- readRDS("data/austraits_develop.RDS")
 
+# load woodiness data
+
+woodiness_data <- read_csv("data/woodiness_2022.03.19.csv") %>%
+  distinct(taxon_name, .keep_all = T) %>%
+  select(taxon_name, plant_growth_form_recoded, woodiness_recoded)
 ```
+
 
 ```{r}
 sum_no_NA <- function(x) if(all(is.na(x))) NA_integer_ else sum(x, na.rm=TRUE)
 ```
-
-```{r}
-##test to check if points were correclty sampled from raster
-
-# raster::plot(new_worldclim)
-# points(x=extracted_object$longitude, y=extracted_object$latitude, col=rev(terrain.colors(255))[(extracted_object$value - raster::minValue(new_worldclim))/
-#                                          (raster::maxValue(new_worldclim)- raster::minValue(new_worldclim)) * 255])
-
-```
-
 
 ```{r}
 #where are sites located?
@@ -73,6 +71,35 @@ location_of_sites <-
 # load map of australia (required for climate data analysis)
 au_map <- raster::raster("data/australia.tif")
 ```
+
+```{r}
+paste("data/WC_new/", list.files("data/WC copy"), sep = "")[2] %>%
+  map(extract_compile_data, data_source = "WC") %>%
+  bind_rows()
+```
+
+```{r}
+paste("data/envirem/", list.files("data/envirem"), sep = "")[2] %>%
+  map(extract_compile_data,) %>%
+  bind_rows()
+```
+
+```{r}
+climate_data <- load_climate_data()
+```
+
+
+```{r}
+##test to check if points were correclty sampled from raster
+
+# raster::plot(new_worldclim)
+# points(x=extracted_object$longitude, y=extracted_object$latitude, col=rev(terrain.colors(255))[(extracted_object$value - raster::minValue(new_worldclim))/
+#                                          (raster::maxValue(new_worldclim)- raster::minValue(new_worldclim)) * 255])
+
+```
+
+
+
 
 <!-- Start with solar which has the highest temporal resolution (i.e. unique daily values) -->
 
@@ -154,7 +181,7 @@ au_map <- raster::raster("data/australia.tif")
 <!--   ungroup() %>% -->
 <!--   group_by(ID, latitude,longitude) %>% -->
 <!--   summarise(vpd_terraclim = mean(vpd_terraclim, na.rm=T)) %>% -->
-<!--   ungroup()  -->
+<!--   ungroup() -->
 
 <!-- ``` -->
 
@@ -404,17 +431,30 @@ au_map <- raster::raster("data/australia.tif")
 <!--   pivot_wider(names_from = key, values_from= value) -->
 <!-- ``` -->
 
+
+```{r}
+ source("R/load_depth_of_regolith.r")
+ reg_depth <- load_reg_depth() %>%
+   select(-buffer_extracted, -key) %>%
+   rename(reg_depth = value)
+```
+
+
 <!-- ```{r} -->
 <!-- climate_data <- climate_data_AWAP %>% -->
 <!--   left_join(climate_data_WC) %>% -->
 <!--   left_join(climate_data_BC) %>% -->
-<!--   left_join(vpd_terraclimate) -->
+<!--   left_join(vpd_terraclimate)  -->
 <!-- ``` -->
+
+
+
 
 
 ```{r}
 # saveRDS(climate_data, "data/climate_data.RDS")
-climate_data <- readRDS("data/climate_data.RDS")
+climate_data <- readRDS("data/climate_data.RDS") %>%
+  left_join(reg_depth)
 ```
 
 
@@ -518,41 +558,6 @@ field_traits_georef <-
   drop_na(latitude,longitude)
 ```
 
-```{r}
-
-woody_plant_growth_forms <- c("hemi-epiphyte_shrub", "hemi-epiphyte_tree", "leafless_shrub_tree", "parasite_woody", "subshrub", "shrub", "treelet", "tree", "shrub tree", "shrub treelet",
-"shrub subshrub","herb subshrub", "herb_large shrub", "herb shrub", "tree tree")
-
-austraits$traits %>% 
-  filter(trait_name== "plant_growth_form") %>%
-  group_by(taxon_name) %>% 
-  filter(all((value %in% woody_plant_growth_forms))) %>%
-  ungroup() %>%
-  distinct(taxon_name)-> woody_taxa_plant_growth_form
-
-austraits$traits %>% 
-  filter(trait_name == "woodiness") %>% 
-  group_by(taxon_name) %>%
-  filter(all(value %in% c("woody","semi_woody"))) %>%
-  distinct(taxon_name)%>%
-  bind_rows(woody_taxa_plant_growth_form) %>%
-    distinct(taxon_name) -> woody_taxa
-
-# list of species which did not have woody data, updated with data pulled off internet
-read_csv("data/no_woody_data_updated.csv") %>%
-  filter(woodiness %in% c("woody","semi_woody")) %>%
-           distinct(taxon_name) %>%
-           bind_rows(woody_taxa) %>%
-           distinct(taxon_name) -> woody_taxa
-
-```
-
-Create a new trait dataframe to only include observations with associated latitude and longitude
-```{r include=FALSE}
-woody_field_traits_georef <- 
-  field_traits_georef %>%
-  filter(taxon_name %in% woody_taxa$taxon_name)
-```
 
 Go through and remove families which were recorded as woody but either aren't woody or do not have a tree/shrub-like growth form, e.g. grass,sedges, palms, ferns
 
@@ -563,7 +568,7 @@ ferns_species <-
 
 palm_species <-
   austraits$taxa%>%
-  filter(family %in% c("Arecaceae"))
+  filter(family %in% c("Arecaceae", "Pandanaceae"))
 
 cycad_species <-
   austraits$taxa%>%
@@ -577,13 +582,21 @@ ginger_species <-
   austraits$taxa %>%
   filter(family %in% c("Zingiberaceae"))
 
-woody_field_traits_georef %>%
+field_traits_georef %>%
   filter(!taxon_name %in% ferns_species$taxon_name) %>%
   filter(!taxon_name %in% palm_species$taxon_name)%>%
   filter(!taxon_name %in% cycad_species$taxon_name)%>%
   filter(!taxon_name %in% graminoid_species$taxon_name)%>%
   filter(!taxon_name %in% ginger_species$taxon_name) ->
-  woody_field_traits_georef_tree_form
+  field_traits_georef_tree_form
+```
+
+
+```{r}
+field_traits_georef_tree_form %>%
+  left_join(woodiness_data) %>%
+  filter(woodiness_recoded == "woody") %>%
+  filter(plant_growth_form_recoded %in% c("mallee","mallee shrub","mallee shrub tree", "mallee tree", "mallee tree shrub", "mallet", "shrub", "shrub mallee", "shrub subshrub", "shrub tree", "shrub tree mallee", "shrub treelet", "shurb", "shurb subshrub", "subshrub", "subshrub shrub", "tree", "tree (shrub)", "tree mallee", "tree shrub")) -> woody_field_traits_georef_tree_form
 ```
 
 For species with more than one observation, we can check to see if their values are relatively consistent by inspecting max:min ratio, sd, CV etc. We need to do this seperately for measurements involving leaves and for the rest of the traits because of the fact that hte leaf vs. leaflet perspective will lead to large differences in measurements. So we need to first divide the leaf area dataset up into leaf area measurements on simple leaves, compound leaves measured at the leaflet scale, and leaf area measured at the leaf scale. 
@@ -695,19 +708,19 @@ woody_field_traits_georef_tree_form %>%
 
 We will now inspect distribution of data in each study relative to total distribution to see if there is any erroneous data
 ```{r eval=FALSE, include=FALSE}
-traits_to_inspect <- woody_field_traits_georef_tree_form %>%
-   distinct(trait_name)
-
-trait_by_dataset_core_traits<-function(trait){
-
-woody_field_traits_georef_tree_form %>%
-  filter(trait_name == trait) %>%
-  distinct(dataset_id) -> dataset_index
-
-purrr::map(dataset_index$dataset_id, plot_trait_by_dataset, trait)
-}
-
-purrr::map(traits_to_inspect$trait_name, trait_by_dataset_core_traits)
+# traits_to_inspect <- woody_field_traits_georef_tree_form %>%
+#    distinct(trait_name)
+# 
+# trait_by_dataset_core_traits<-function(trait){
+# 
+# woody_field_traits_georef_tree_form %>%
+#   filter(trait_name == trait) %>%
+#   distinct(dataset_id) -> dataset_index
+# 
+# purrr::map(dataset_index$dataset_id, plot_trait_by_dataset, trait)
+# }
+# 
+# purrr::map(traits_to_inspect$trait_name, trait_by_dataset_core_traits)
 ```
 
 
@@ -793,47 +806,47 @@ and biochemical components of carbon isotope discrimination, respectively (Wang 
 
 
 ``` {r}
+library(stringi)
+
 woody_field_traits_georef_tree_form %>% 
-  filter(trait_name %in% c("ci_over_ca", "leaf_delta13C")) %>%
+  filter(trait_name %in% c("leaf_delta13C")) %>%
   select(trait_name, value, observation_id, taxon_name,dataset_id,site_name, context_name, date, ID) %>%
   mutate(value = as.numeric(value)) %>%
   group_by(trait_name, observation_id, taxon_name, dataset_id, site_name, context_name, date, ID) %>%
   summarise(value = mean(value)) %>%
   ungroup() %>%
-  spread(key = trait_name, value = value)%>%
-  mutate(delta_C = (-8-leaf_delta13C)/(1+leaf_delta13C/1000))%>%
-  mutate(ci_over_ca_calc = (delta_C-4.4)/(27-4.4)) %>%
-  mutate(ci_over_ca_combined = ifelse(!is.na(ci_over_ca),ci_over_ca,ci_over_ca_calc)) ->calculated_data
+  spread(key = trait_name, value = value) -> woody_field_traits_georef_tree_form_c13_data
+
+austraits$methods %>%
+  filter(trait_name == "leaf_delta13C") %>%
+  filter(dataset_id %in% woody_field_traits_georef_tree_form_c13_data$dataset_id) %>%
+  mutate(year_start = as.numeric(gsub(".*?([0-9]+).*", "\\1", year_collected_start)), year_end = as.numeric(gsub(".*?([0-9]+).*", "\\1", year_collected_end))) %>%
+  select(dataset_id, year_start, year_end) -> years_c13_data
+
+woody_field_traits_georef_tree_form_c13_data <- woody_field_traits_georef_tree_form_c13_data %>%
+  left_join(years_c13_data) %>%
+  rowwise() %>%
+  mutate(average_year = round(mean(c(year_end, year_start)))) %>%
+  left_join(select(climate_data, c(latitude, longitude, ID))) %>%
+  mutate(c_air = calc_c_air(average_year, latitude)) %>%
+  mutate(delta_C = (c_air-leaf_delta13C)/(1+leaf_delta13C/1000))%>%
+  mutate(ci_over_ca_from_c13 = (delta_C-4.4)/(27-4.4)) ->calculated_data
 
 calculated_data %>%
   select(observation_id, taxon_name, dataset_id, site_name, context_name, date, 
-         ci_over_ca_combined, ID) %>%
-  filter(!is.na(ci_over_ca_combined)) %>%
+         ci_over_ca_from_c13, ID) %>%
+  filter(!is.na(ci_over_ca_from_c13)) %>%
   mutate(units = "unitless",
-         trait_name = "ci_over_ca_calc",
-         value = as.numeric(ci_over_ca_combined)) %>%
-  select(-ci_over_ca_combined) -> ci_over_ca_calculated
+         trait_name = "ci_over_ca_from_c13",
+         value = as.numeric(ci_over_ca_from_c13)) %>%
+  select(-ci_over_ca_from_c13) -> ci_over_ca_calculated
 
-```
+ci_over_ca_calculated %>%
+  filter(!is.na(value)) %>%
+  mutate(units = "unitless",
+         trait_name = "logit_ci_over_ca_from_c13",
+         value = log(value/(1-value))) -> logit_ci_over_ca_calculated
 
-
-``` {r, fig.width=10}
-
-calculated_data %>% drop_na(leaf_delta13C, ci_over_ca)%>% mutate(proportion_difference = abs(ci_over_ca - ci_over_ca_calc)/ci_over_ca_calc) -> ci_over_ca_validation
-
-
-hist(ci_over_ca_validation$proportion_difference, xlab = "abs(Observed_X-Predicted_X)/Predicted_X", main = "Difference between observed and predicted X")
-```
-
-
-``` {r, fig.width=10}
-#add a 1:1 line
-
-ci_over_ca_validation %>% ggplot(aes(x=ci_over_ca, y=leaf_delta13C))+geom_point()+theme(axis.text=element_text(size=12),
-        axis.title=element_text(size=14,face="bold"))
-
-ci_over_ca_validation %>% ggplot(aes(x=ci_over_ca, y=ci_over_ca_calc))+geom_point()+xlab("Observed ci_over_ca")+ylab("Estimated ci_over_ca")+theme(axis.text=element_text(size=12),
-        axis.title=element_text(size=14,face="bold")) + geom_abline(yintercept=0, slope=1)
 ```
 
 Bind cliamte data to the summarised data frame
@@ -842,30 +855,18 @@ woody_field_traits_georef_tree_form %>%
   bind_rows(leaf_N_per_area_calcuated) %>%
   bind_rows(leaf_area_calcuated) %>%
   bind_rows(specific_leaf_area_calcuated) %>%
-  bind_rows(ci_over_ca_calculated) %>%
+  bind_rows(ci_over_ca_calculated) %>% 
+  bind_rows(logit_ci_over_ca_calculated) %>%
   group_by(site_name, taxon_name, dataset_id, trait_name, ID) %>%
   summarise(value=mean(value, na.rm=T)) %>%
   ungroup() %>%
   left_join(climate_data)-> woody_field_traits_georef_tree_form_climate
 ```
 
-Need to also transform ci:ca ratio to the logit form
-
-```{r}
-woody_field_traits_georef_tree_form_climate %>%
-  filter(trait_name == "ci_over_ca_calc") %>%
-  filter(value <=1) %>%
-  mutate(value = log(value/(1-value))) %>%
-  mutate(trait_name = "logit_ci_over_ca_calc") -> logit_ci_over_ca
-
-woody_field_traits_georef_tree_form_climate %>%
-  bind_rows(logit_ci_over_ca) -> woody_field_traits_georef_tree_form_climate
-```
-
 
 ```{r}
 #define the core traits to focus on
-core_traits <- c("huber_value","logit_ci_over_ca_calc","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height","leaf_area_calc","seed_mass")
+core_traits <- c("huber_value","leaf_delta13C","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height","leaf_area_calc","seed_mass")
 ```
 
 
@@ -876,9 +877,29 @@ First, let's calculate the correlations between the traits and the environmental
 #turn the trait data into a wide format for correlation analyses
 woody_field_traits_georef_tree_form_climate %>%
   filter(trait_name %in% core_traits) %>%
-  select(trait_name, value, Temp = Temp_BC, Max_Temp = max_temp_BC, GDD_5 = GDD_5_envirem, VPD_terra = vpd_terraclim, avg_temp_WC_5=avg_temp_WC_5,  VPD_AWAP = VPD_15_AWAP, VPD = VPD_WC, VPD_WC_mean_t = VPD_WC_mean_t, SWdown = solar_WC, Prec = Prec_BC, PET = PET_envirem, Prec_CV = Prec_CV_BC, elev = elev_WC,latitude,longitude,site_name, taxon_name, dataset_id, ID) %>%
+  select(trait_name, value, Temp = Temp_BC, Max_Temp = max_temp_BC, GDD_5 = GDD_5_envirem, VPD_terra = vpd_terraclim, avg_temp_WC_5=avg_temp_WC_5,  VPD_AWAP = VPD_15_AWAP, VPD = VPD_WC, VPD_WC_mean_t = VPD_WC_mean_t, SWdown = solar_WC, Prec = Prec_BC, PET = PET_envirem, Prec_CV = Prec_CV_BC, elev = elev_WC, reg = reg_depth,latitude,longitude,site_name, taxon_name, dataset_id, ID) %>%
   mutate(MI = Prec/PET) %>%
   pivot_wider(values_from = value, names_from = trait_name) -> woody_field_traits_georef_tree_form_climate_wide
+
+
+woody_field_traits_georef_tree_form_climate_wide %>%
+  mutate(log_leaf_area = log(leaf_area_calc),
+         log_seed_mass = log(seed_mass),
+         log_SLA = log(specific_leaf_area_calc),
+         log_wood_dens = log(wood_density),
+         log_leaf_N = log(leaf_N_per_area_calc),
+         log_height = log(plant_height),
+         log_huber = log(huber_value),
+         log_VPD = log(VPD),
+         log_VPD_terra = log(VPD_terra),
+         log_VPD_15 = log(VPD_AWAP),
+         log_VPD_WC_mean_t = log(VPD_WC_mean_t),
+         log_Prec = log(Prec),
+         log_MI = log(MI),
+         log_Prec_CV = log(Prec_CV),
+         sqrt_elev = sqrt(elev),
+         log_reg = log(reg)) -> woody_field_traits_georef_tree_form_climate_wide
+
 
 
 #environmental variables
@@ -897,6 +918,8 @@ hist(log(woody_field_traits_georef_tree_form_climate_wide$MI))
 hist(log(woody_field_traits_georef_tree_form_climate_wide$Prec_CV))
 hist(sqrt(woody_field_traits_georef_tree_form_climate_wide$elev))
 hist((woody_field_traits_georef_tree_form_climate_wide$latitude))
+hist(log(woody_field_traits_georef_tree_form_climate_wide$reg))
+
 
 #traits
 hist(log(woody_field_traits_georef_tree_form_climate_wide$leaf_area_calc))
@@ -906,7 +929,8 @@ hist(log(woody_field_traits_georef_tree_form_climate_wide$leaf_N_per_area_calc))
 hist(log(woody_field_traits_georef_tree_form_climate_wide$plant_height))
 hist(log(woody_field_traits_georef_tree_form_climate_wide$huber_value))
 hist(log(woody_field_traits_georef_tree_form_climate_wide$seed_mass))
-hist((woody_field_traits_georef_tree_form_climate_wide$logit_ci_over_ca_calc))
+hist((woody_field_traits_georef_tree_form_climate_wide$logit_ci_over_ca_from_c13))
+hist((woody_field_traits_georef_tree_form_climate_wide$ci_over_ca_from_c13))
 
 #all traits bar wood density and ci:ca ratio, which is already logit, will be log transformed.
 ```
@@ -923,10 +947,242 @@ png("output/supps_ellipse.png", height=1300, width=2000, res=275)
 woody_field_traits_georef_tree_form_climate_wide %>%
   select(-c(,site_name, taxon_name, dataset_id, ID)) -> for_corrplot
 trait_env_correlation<- cor(for_corrplot, use="pairwise.complete.obs")
-corrplot::corrplot(trait_env_correlation[c("seed_mass","logit_ci_over_ca_calc","leaf_area_calc","specific_leaf_area_calc","wood_density","leaf_N_per_area_calc","plant_height","huber_value"),c("Temp","Max_Temp","GDD_5","VPD","VPD_AWAP","VPD_WC_mean_t","SWdown","Prec","PET","MI","Prec_CV","elev","latitude")], method="ellipse")
+corrplot::corrplot(trait_env_correlation[c("seed_mass","logit_ci_over_ca_from_c13","leaf_area_calc","specific_leaf_area_calc","wood_density","leaf_N_per_area_calc","plant_height","huber_value"),c("Temp","Max_Temp","GDD_5","VPD","VPD_AWAP","VPD_WC_mean_t","SWdown","Prec","PET","MI","Prec_CV","elev","latitude","reg")], method="ellipse")
 
 dev.off()
 ```
+
+```{r}
+library(quantreg)
+
+
+rho <- function(u,tau=.5){
+  u*(tau - (u < 0))
+}
+
+calc_pseudo_r2 <- function(fit, fit_0, tau){
+  V<-sum(rho(fit$residuals[,tau], fit$tau[tau]))
+  V0<-sum(rho(fit_0$residuals[,tau], fit$tau[tau]))
+  
+  1 - V/V0
+}
+
+calc_quant_reg <- function(min_tau = 0.05, max_tau = 0.95, length.required = 50, y, x){
+  
+  tau_ex <- seq(min_tau, max_tau, length.out = length.required)
+  
+  fit <- rq(y ~ x, tau = tau_ex)
+  fit_0 <- rq(y ~ 1, tau = tau_ex)
+
+  pseudo_r_2 <- map_dbl(1:length.required, ~calc_pseudo_r2(fit, fit_0, .x))
+  slope <- map_dbl(1:length.required, ~summary(fit)[[.x]]$coefficients[2,1])
+  pvalue <- map_dbl(1:length.required, ~summary(fit)[[.x]]$coefficients[2,4])
+
+  tibble(slope, pseudo_r_2, tau_ex, pvalue)
+}
+
+output <- calc_quant_reg(y = woody_field_traits_georef_tree_form_climate_wide$wood_density, x = scale(log(woody_field_traits_georef_tree_form_climate_wide$Prec)))
+
+
+output %>%
+  ggplot(aes(x = tau_ex)) +
+  geom_line(aes(y = pvalue), col = "grey20") +
+  geom_line(aes(y = -1*slope), linetype = "dashed") +
+  geom_hline(yintercept = 0.05, linetype = "dotted") +
+  scale_y_continuous(name = "P-value (solid)", sec.axis = sec_axis(~.*-1, name = "Slope (dashed)"), limits = c(0, 1)) +
+  theme_classic() +
+  xlab("Tau")
+
+output %>%
+  ggplot(aes(x = tau_ex)) +
+  geom_line(aes(y = pvalue), col = "grey20") +
+  geom_line(aes(y = slope), linetype = "dashed") +
+  geom_hline(yintercept = 0.05, linetype = "dotted") +
+  scale_y_continuous(name = "P-value (solid)", sec.axis = sec_axis(~., name = "Slope (dashed)")) +
+  theme_classic() +
+  xlab("Tau")
+
+
+woody_field_traits_georef_tree_form_climate_wide %>%
+  drop_na(Prec, wood_density) %>%
+  ggplot() +
+  geom_point(aes(x = log(Prec), y = wood_density)) +
+  geom_line(aes(x = log(Prec), y = predict(fit)[,91])) +
+  geom_line(aes(x = log(Prec), y = predict(fit)[,1])) +
+  geom_line(aes(x = log(Prec), y = predict(fit)[,51]))
+
+
+woody_field_traits_georef_tree_form_climate_wide %>%
+  drop_na(Prec, leaf_area_calc) %>%
+  ggplot() +
+  geom_point(aes(x = log(Prec), y = log(leaf_area_calc))) +
+  geom_line(aes(x = log(Prec), y = predict(fit)[,91])) +
+  geom_line(aes(x = log(Prec), y = predict(fit)[,1])) +
+  geom_line(aes(x = log(Prec), y = predict(fit)[,51]))
+
+fit <- rq(wood_density ~ log(Prec), tau = seq(0.05, 0.95, 0.01), woody_field_traits_georef_tree_form_climate_wide)
+
+
+
+
+1 - V/V0
+fit_95$residuals <0
+
+fit_95_1 <- rq(log(seed_mass)  ~ 1, tau = 0.95, woody_field_traits_georef_tree_form_climate_wide)
+
+
+fit_95 <- rq(log(seed_mass)  ~ log(Prec), tau = 0.95, woody_field_traits_georef_tree_form_climate_wide)
+fit_5 <- rq(log(seed_mass)  ~ log(Prec), tau = 0.05, woody_field_traits_georef_tree_form_climate_wide)
+fit_50 <- rq(log(seed_mass)  ~ log(Prec), tau = 0.50, woody_field_traits_georef_tree_form_climate_wide)
+
+fit <- rq(log(seed_mass) ~ log(Prec), tau = seq(0.05, 0.95, 0.01), woody_field_traits_georef_tree_form_climate_wide)
+
+ggplot() +
+  geom_line(aes(y = map_dbl(seq(1:91), ~summary(fit)[[.x]]$coefficients[2,4]), x = seq(0.05, 0.95, 0.01))) +
+  geom_line(aes(y = map_dbl(seq(1:91), ~summary(fit)[[.x]]$coefficients[2,1]), x = seq(0.05, 0.95, 0.01)))
+
+
+
+
+anova(fit, test = "Wald", joint=TRUE)
+
+predict(fit_95)
+
+
+summary(fit)
+
+summary(fit)[[1]]$coefficients
+```
+
+```{r}
+log_leaf_area = log(leaf_area_calc),
+         log_SLA = log(specific_leaf_area_calc),
+         log_wood_dens = log(wood_density),
+         log_leaf_N = log(leaf_N_per_area_calc),
+         log_height = log(plant_height),
+         log_huber = log(huber_value),
+         log_VPD = log(VPD),
+         log_VPD_terra = log(VPD_terra),
+         log_VPD_15 = log(VPD_AWAP),
+         log_VPD_WC_mean_t = log(VPD_WC_mean_t),
+         log_Prec = log(Prec),
+         log_MI = log(MI),
+         log_Prec_CV = log(Prec_CV),
+         sqrt_elev = sqrt(elev),
+         log_reg = log(reg)
+
+
+
+core_traits <- c("log_huber","leaf_delta13C","log_leaf_N","log_SLA","log_wood_dens","log_height","log_leaf_area","log_seed_mass")
+
+
+woody_field_traits_georef_tree_form_climate_wide %>% 
+  select(all_of(core_traits), log_VPD, log_MI, avg_temp_WC_5, log_Prec_CV, SWdown) %>%
+  pivot_longer(cols = c(core_traits, leaf_delta13C), names_to = "trait_name", values_to = "trait_value") %>%
+  pivot_longer(cols = -c(trait_name, trait_value), names_to = "env_name", values_to = "env_value") %>%
+  drop_na(env_value, trait_value) %>%
+  nest(-env_name, -trait_name)%>%
+  mutate(output_5 = map(data, ~rq(trait_value ~ env_value, tau = 0.05, .x, ci = TRUE, alpha = 0.99))) %>%
+  mutate(output_95 = map(data, ~rq(trait_value ~ env_value, tau = 0.95, .x, ci = TRUE, alpha = 0.99))) %>%
+  mutate(p_value_anova = map2_dbl(.x = output_5, .y = output_95, ~anova(.x, .y)$table$pvalue)) %>%
+  mutate(slope_sig_5 = map_chr(output_5, ~if_else((.x$coefficients[2,2] * .x$coefficients[2,3]) > 0, "sig", "non_sig"))) %>%
+  mutate(slope_sig_95 = map_chr(output_95, ~if_else((.x$coefficients[2,2] * .x$coefficients[2,3]) > 0, "sig", "non_sig"))) %>%
+  mutate(slope_5 = map_chr(output_5, ~if_else(sign(.x$coefficients[2,1]) == 1, "pos", "neg"))) %>%
+  mutate(slope_95 = map_chr(output_95, ~if_else(sign(.x$coefficients[2,1]) == 1, "pos", "neg"))) %>%
+  mutate(slope_5_value = map_dbl(output_5, ~.x$coefficients[2,1])) %>%
+  mutate(slope_95_value = map_dbl(output_95, ~.x$coefficients[2,1])) %>%
+  mutate(symbol = case_when(
+    slope_sig_5 == "non_sig" & slope_sig_95 == "non_sig" ~ "=",
+    slope_sig_5 == "non_sig" & slope_sig_95 == "sig" & slope_5 == "neg" & slope_95 == "neg" ~ "_\\",
+    slope_sig_5 == "non_sig" & slope_sig_95 == "sig" & slope_5 == "neg" & slope_95 == "pos" ~ "/_",
+    slope_sig_5 == "non_sig" & slope_sig_95 == "sig" & slope_5 == "pos" & slope_95 == "neg" ~ "_\\",
+    slope_sig_5 == "non_sig" & slope_sig_95 == "sig" & slope_5 == "pos" & slope_95 == "pos" ~ "/_",
+    slope_sig_5 == "sig" & slope_sig_95 == "non_sig" & slope_5 == "neg" & slope_95 == "neg" ~ "\\-",
+    slope_sig_5 == "sig" & slope_sig_95 == "non_sig" & slope_5 == "neg" & slope_95 == "pos" ~ "\\-",
+    slope_sig_5 == "sig" & slope_sig_95 == "non_sig" & slope_5 == "pos" & slope_95 == "neg" ~ "-/",
+    slope_sig_5 == "sig" & slope_sig_95 == "non_sig" & slope_5 == "pos" & slope_95 == "pos" ~ "-/",
+    p_value_anova > 0.01 & slope_sig_5 == "sig" & slope_sig_95 == "sig" & slope_5 == "neg" & slope_95 == "neg" ~ "\\ ",
+    slope_sig_5 == "sig" & slope_sig_95 == "sig" & slope_5 == "neg" & slope_95 == "pos" ~ "<",
+    slope_sig_5 == "sig" & slope_sig_95 == "sig" & slope_5 == "pos" & slope_95 == "neg" ~ ">",
+    p_value_anova > 0.01 & slope_sig_5 == "sig" & slope_sig_95 == "sig" & slope_5 == "pos" & slope_95 == "pos" ~ "//",
+    slope_5_value < slope_95_value & p_value_anova < 0.01 & slope_sig_5 == "sig" & slope_sig_95 == "sig" & slope_5 == "neg" & slope_95 == "neg" ~ "\\-",
+    slope_5_value < slope_95_value & p_value_anova < 0.01 & slope_sig_5 == "sig" & slope_sig_95 == "sig" & slope_5 == "pos" & slope_95 == "pos" ~ "//_",
+    slope_5_value > slope_95_value & p_value_anova < 0.01 & slope_sig_5 == "sig" & slope_sig_95 == "sig" & slope_5 == "neg" & slope_95 == "neg" ~ "_\\",
+    slope_5_value > slope_95_value & p_value_anova < 0.01 & slope_sig_5 == "sig" & slope_sig_95 == "sig" & slope_5 == "pos" & slope_95 == "pos" ~ "-/")
+) -> woody_field_traits_georef_tree_form_climate_long_outputs
+
+
+
+woody_field_traits_georef_tree_form_climate_long_outputs %>%
+  select(-data, -output_5, -output_95)%>% View()  
+  
+  mutate(slope_sig_5 = map_dbl(output_5, ~if_else(sign(summary(.x)[[2]]$coefficients[2,2]) == sign(summary(.x)[[2]]$coefficients[2,3]), "sig", "non_sig")))
+
+
+                       
+                       
+                       
+                       -> woody_field_traits_georef_tree_form_climate_long_outputs
+  
+
+woody_field_traits_georef_tree_form_climate_long_outputs$output[[3]]
+
+
+woody_field_traits_georef_tree_form_climate_long_outputs %>%
+  select(trait_name, env_name, output) %>% View()
+  
+woody_field_traits_georef_tree_form_climate_long_outputs %>%
+  mutate(predict_95 = map(output_95, ~predict(.x)),
+         predict_5 = map(output_5, ~predict(.x))
+         ) %>%
+  unnest(cols = c(data, predict_95, predict_5))-> woody_field_traits_georef_tree_form_climate_long_outputs1
+  
+fit <- rq(log_huber ~ SWdown, tau = c(0.05, 0.5, 0.95), woody_field_traits_georef_tree_form_climate_wide)
+
+library(quantreg)
+
+
+
+
+woody_field_traits_georef_tree_form_climate_long_outputs1 %>%
+  ggplot(aes(x = env_value, y = trait_value)) +
+  geom_point() +
+  geom_line(aes(y = predict_95)) +
+  geom_line(aes(y = predict_5)) +
+  facet_grid(trait_name~env_name, scales = "free") +
+  theme_classic()
+
+woody_field_traits_georef_tree_form_climate_long_outputs1$predict_95
+  unnest(data) ->  woody_field_traits_georef_tree_form_climate_long_outputs
+
+```
+
+
+```{r}
+woody_field_traits_georef_tree_form_climate %>%
+  filter(trait_name %in% core_traits) %>%
+  select(trait_name, value, Temp = Temp_BC, Max_Temp = max_temp_BC, GDD_5 = GDD_5_envirem, VPD_terra = vpd_terraclim, avg_temp_WC_5=avg_temp_WC_5,  VPD_AWAP = VPD_15_AWAP, VPD = VPD_WC, VPD_WC_mean_t = VPD_WC_mean_t, SWdown = solar_WC, Prec = Prec_BC, PET = PET_envirem, Prec_CV = Prec_CV_BC, elev = elev_WC, reg = reg_depth,latitude,longitude,site_name, taxon_name, dataset_id, ID) %>%
+  mutate(MI = Prec/PET) -> woody_field_traits_georef_tree_form_climate
+
+
+
+woody_field_traits_georef_tree_form_climate %>%
+  filter(trait_name %in% core_traits) %>%
+  select(trait_name, value, VPD_terra, avg_temp_WC_5, SWdown, MI, Prec_CV, elev,latitude,longitude,site_name, taxon_name, dataset_id, ID)-> woody_field_traits_georef_tree_form_climate
+
+
+
+
+woody_field_traits_georef_tree_form_climate %>%
+  select(-dataset_id, -site_name, -ID, -latitude, -longitude) %>%
+  pivot_longer(cols = -c(trait_name, value, taxon_name), values_to = "env_value", names_to = "env") %>%
+  drop_na(env_value, trait_name) %>%
+  nest(-env, -trait_name) -> woody_field_traits_georef_tree_form_climate_long
+
+```
+
+
+
 
 ```{r}
 woody_field_traits_georef_tree_form_climate_wide %>%
@@ -943,12 +1199,41 @@ woody_field_traits_georef_tree_form_climate_wide %>%
          log_Prec = log(Prec),
          log_MI = log(MI),
          log_Prec_CV = log(Prec_CV),
-         sqrt_elev = sqrt(elev)) -> woody_field_traits_georef_tree_form_climate_wide
+         sqrt_elev = sqrt(elev),
+         log_reg = log(reg)) -> woody_field_traits_georef_tree_form_climate_wide
 
 woody_field_traits_georef_tree_form_climate_wide %>%
   select(-c(,site_name, taxon_name, dataset_id, ID)) -> for_corrplot
 trait_env_correlation_transformed<- cor(for_corrplot, use="pairwise.complete.obs")
 ```
+
+
+```{r}
+woody_field_traits_georef_tree_form_climate %>%
+  filter(trait_name == "ci_over_ca_from_c13") %>%
+  ggplot(aes(x = avg_temp_WC_5, y = value)) +
+  geom_point()
+
+woody_field_traits_georef_tree_form_climate %>%
+  filter(trait_name == "ci_over_ca_from_c13") %>%
+  ggplot(aes(x = mean_annual_shortwave_radiation_AWAP, y = value)) +
+  geom_point()
+
+woody_field_traits_georef_tree_form_climate %>%
+  filter(trait_name == "ci_over_ca_from_c13") %>%
+  ggplot(aes(x = prec_WC, y = value)) +
+  geom_point() +
+  scale_x_log10()
+
+woody_field_traits_georef_tree_form_climate %>%
+  filter(trait_name == "ci_over_ca_from_c13") %>%
+  ggplot(aes(x = elev_WC, y = value)) +
+  geom_point() +
+  scale_x_log10()
+
+  
+```
+
 
 Test correlations between environmental predictors for the core traits and across all sites
 
@@ -958,7 +1243,7 @@ filter_function <- function(core_trait){
 woody_field_traits_georef_tree_form_climate_wide %>%
     drop_na(core_trait) %>%
     distinct(dataset_id, site_name, .keep_all=TRUE) %>%
-select((c("Temp","Max_Temp","GDD_5","log_VPD","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev","latitude"))) -> data
+select((c("Temp","Max_Temp","GDD_5","log_VPD","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev","latitude","log_reg"))) -> data
 
 corr_plot_data <- cor(data, use="pairwise.complete.obs")
 corrplot::corrplot(corr_plot_data, method="ellipse", type="lower")
@@ -968,7 +1253,7 @@ purrr::map(core_traits, filter_function)
 
 woody_field_traits_georef_tree_form_climate_wide %>%
     distinct(dataset_id, site_name, .keep_all=TRUE) %>%
-    select((c("Temp","Max_Temp","GDD_5","log_VPD","log_VPD_15","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev","latitude"))) %>% cor(., use="pairwise.complete.obs") ->corrplot_data_whole_data
+    select((c("Temp","Max_Temp","GDD_5","log_VPD","log_VPD_15","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev","latitude","log_reg"))) %>% cor(., use="pairwise.complete.obs") ->corrplot_data_whole_data
 
 corrplot::corrplot(corrplot_data_whole_data, method="ellipse", type="lower")
 
@@ -1005,7 +1290,7 @@ dev.off()
 ```{r}
 png("output/supps_ellipse_log.png", height=1300, width=2000, res=275)
 
-corrplot::corrplot(trait_env_correlation_transformed[c("seed_mass","logit_ci_over_ca_calc","log_leaf_area","log_SLA","log_wood_dens","log_leaf_N","log_height","log_huber"),c("Temp","Max_Temp","GDD_5","avg_temp_WC_5","log_VPD","log_VPD_15","log_VPD_WC_mean_t","log_VPD_terra","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev","latitude")], method="ellipse")
+corrplot::corrplot(trait_env_correlation_transformed[c("seed_mass","ci_over_ca_from_c13","log_leaf_area","log_SLA","log_wood_dens","log_leaf_N","log_height","log_huber"),c("Temp","Max_Temp","GDD_5","avg_temp_WC_5","log_VPD","log_VPD_15","log_VPD_WC_mean_t","log_VPD_terra","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev","latitude","log_reg")], method="ellipse")
 
 dev.off()
 ```
@@ -1014,7 +1299,7 @@ dev.off()
 ```{r}
 png("output/supps_ellipse_log_traits.png", height=1300, width=2000, res=275)
 
-corrplot::corrplot(trait_env_correlation_transformed[c("seed_mass","logit_ci_over_ca_calc","log_leaf_area","log_SLA","log_wood_dens","log_leaf_N","log_height","log_huber"),c("seed_mass","logit_ci_over_ca_calc","log_leaf_area","log_SLA","log_wood_dens","log_leaf_N","log_height","log_huber")], method="ellipse", type = "lower")
+corrplot::corrplot(trait_env_correlation_transformed[c("seed_mass","ci_over_ca_from_c13","log_leaf_area","log_SLA","log_wood_dens","log_leaf_N","log_height","log_huber"),c("seed_mass","logit_ci_over_ca_from_c13","log_leaf_area","log_SLA","log_wood_dens","log_leaf_N","log_height","log_huber")], method="ellipse", type = "lower")
 
 dev.off()
 ```
@@ -1085,8 +1370,8 @@ Optimality figure
 ```{r}
 library(ggpubr)
 
-optimality_traits <-c("leaf_N_per_area_calc", "huber_value","logit_ci_over_ca_calc","leaf_area_calc")
-trait_env_correlation_transformed[c("log_leaf_N","log_huber","logit_ci_over_ca_calc","log_leaf_area"),c("Temp","log_VPD")] %>% 
+optimality_traits <-c("leaf_N_per_area_calc", "huber_value","ci_over_ca_from_c13 ","leaf_area_calc")
+trait_env_correlation_transformed[c("log_leaf_N","log_huber","ci_over_ca_from_c13","log_leaf_area"),c("Temp","log_VPD")] %>% 
   as_tibble() %>%
   mutate(trait_name = optimality_traits) %>%
   rename(avg_temp_WC = Temp, VPD_WC = log_VPD) %>%
@@ -1099,7 +1384,7 @@ sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("a"),")",sep=""
 figure_opt_plot("VPD_WC", logit="no") -> a
 a + ylab(expression(Leaf~N~per~area~(mg~mm^{-2}))) -> a
 
-trait_to_plot <- c("logit_ci_over_ca_calc")
+trait_to_plot <- c("ci_over_ca_from_c13")
 
 sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("b"),")",sep=""))
 
@@ -1127,7 +1412,7 @@ sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("e"),")",sep=""
 figure_opt_plot_log_x("avg_temp_WC", logit="no") -> e
 e + ylab(expression(Leaf~N~per~area~(mg~mm^{-2}))) -> e
 
-trait_to_plot <- c("logit_ci_over_ca_calc")
+trait_to_plot <- c("ci_over_ca_from_c13")
 
 sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("f"),")",sep=""))
 
@@ -1208,7 +1493,7 @@ dev.off()
 
 ```{r, fig.width=10}
 #define the core traits to focus on
-core_traits <- c("huber_value","ci_over_ca_calc","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height","leaf_area_calc","seed_mass")
+core_traits <- c("huber_value","logit_ci_over_ca_from_c13","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height","leaf_area_calc","seed_mass")
 
 #give them a short name
 trait_names <- tibble(trait_name = core_traits,
