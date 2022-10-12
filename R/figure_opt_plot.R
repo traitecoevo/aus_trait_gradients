@@ -1,11 +1,8 @@
-figure_opt_plot <- function(enviro_variable, logit){
-  correlations %>%
-    filter(env == enviro_variable)%>%
-    rename(cor=value)-> correlation_for_plot
-  
-  woody_field_traits_georef_tree_form_climate%>%
+figure_opt_plot <- function(data, enviro_variable, logit){
+
+  data %>%
     filter(trait_name %in% trait_to_plot) %>%
-    select(trait_name, value, enviro_variable)%>%
+    dplyr::select(trait_name, value, enviro_variable)%>%
     pivot_longer(-c("trait_name", "value"), names_to = "env", values_to = "env_value")%>%
     left_join(sub_labels) %>%
     left_join(correlation_for_plot) %>%

@@ -516,7 +516,7 @@ climate_data %>%
 ```{r}
 traits <- austraits$traits %>%
   left_join(location_of_sites) %>%
-  filter(trait_name %in% c("leaf_area","leaf_dry_mass","specific_leaf_area","leaf_N_per_dry_mass","leaf_N_per_area","ci_over_ca","wood_density","plant_height", "seed_mass", "leaf_delta13C","huber_value")) %>%
+  filter(trait_name %in% c("leaf_area","leaf_dry_mass","specific_leaf_area","leaf_N_per_dry_mass","leaf_N_per_area","wood_density","plant_height", "seed_mass", "leaf_delta13C","huber_value")) %>%
   mutate(value = as.numeric(value)) %>%
   left_join(climate_data)
 ```

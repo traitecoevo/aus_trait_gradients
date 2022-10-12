@@ -1,7 +1,8 @@
+library(plotbiomes)
+
 austraits_climate_space <- function(core_trait){
-  woody_field_traits_georef_tree_form_climate_wide %>%
+    woody_field_traits_georef_tree_form_climate_wide %>%
     drop_na(core_trait) -> site_data
-  
   ggplot() +
   geom_polygon(
     data = Whittaker_biomes,
@@ -35,8 +36,8 @@ austraits_climate_space <- function(core_trait){
   ) +
   geom_point(
     data = site_data,
-    aes(x = Temp/10,
+    aes(x = Temp,
         y = Prec/10)
   ) +
-    ggtitle(core_trait)
+    ggtitle(core_trait) ->p
 }
