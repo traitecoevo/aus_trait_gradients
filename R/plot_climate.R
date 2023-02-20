@@ -14,6 +14,7 @@ au_basemap <- function() {
       fill = factor(australia)
     )) +
     myTheme
+  au_basemap
 }
 
 plot_climate_space <- function(traits_sites, au_bioclim) {
@@ -83,15 +84,14 @@ plot_climate_space <- function(traits_sites, au_bioclim) {
 
 
 plot_site_map_by_trait <- function(trait_df) {
-
-  df <- 
+  df <-
     trait_df %>%
-    select(site_name, lat, lon, trait_name) %>%
+    dplyr::select(location_name, latitude, longitude, trait_name) %>%
     filter(
-      lat > (-45), lat < (-9.5), lon < (153), lon > (110)
+      latitude > (-45), latitude < (-9.5), longitude < (153), longitude > (110)
     ) %>%
     filter(
-      !site_name %in% c(
+      !location_name %in% c(
         "site_at_-17.4167_degS_and_151.8833_degE",
         "site_at_-16.5833_degS_and_150.3167_degE",
         "site_at_-16.9333_degS_and_149.1833_degE",
@@ -100,17 +100,18 @@ plot_site_map_by_trait <- function(trait_df) {
     ) %>%
     drop_na()
 
+
     au_basemap() +
     geom_pointdensity(
       data = df,
-      aes(y = lat, x = lon),
+      aes(y = latitude, x = longitude),
       inherit.aes = FALSE,
       show.legend = FALSE,
       adjust = 1,
       size = 0.5,
       alpha = 0.8
     ) +
-    scale_color_viridis(option = "plasma") +
+    scale_color_viridis_b(option = "plasma") +
     theme(
       legend.justification = c(-0.1, 0),
       legend.position = c(0.05, 0.05),
@@ -119,9 +120,9 @@ plot_site_map_by_trait <- function(trait_df) {
     scale_fill_grey(
       name = "",
       start = 0.8,
-      guide = FALSE,
+      guide = "none",
       na.value = "white"
-    ) + xlab("") + ylab("") + 
+    ) + xlab("") + ylab("") +
     facet_wrap(~trait_name)
 }
 
@@ -146,13 +147,13 @@ myTheme <-
 
     axis.line.y = element_line(),
 
-    axis.title.x = element_text(size = 12, margin = margin(10, 0, 0, 0)),
+    axis.title.x = element_text(size = 12, margin = ggplot2::margin(10, 0, 0, 0)),
 
-    axis.title.y = element_text(size = 12, margin = margin(0, 10, 0, 0)),
+    axis.title.y = element_text(size = 12, margin = ggplot2::margin(0, 10, 0, 0)),
 
-    axis.text.x = element_text(size = 9, colour = "#666666", margin = margin(15, 0, 0, 0, "pt")),
+    axis.text.x = element_text(size = 9, colour = "#666666", margin = ggplot2::margin(15, 0, 0, 0, "pt")),
 
-    axis.text.y = element_text(size = 9, colour = "#666666", margin = margin(0, 15, 0, 0, "pt")),
+    axis.text.y = element_text(size = 9, colour = "#666666", margin = ggplot2::margin(0, 15, 0, 0, "pt")),
 
     panel.spacing.y = unit(1, "points"),
 
@@ -163,47 +164,26 @@ myTheme <-
 
 # created two plotting functions for the CHELSA vs. Worldclim comparison, may be redundant or could be refined (also dependent on local TIF files which are too large to commit)
 
-plot_chelsa_climate_data <- function(variable = c("temp","prec")) {
-  
-  au_map <- raster::raster("data/australia.tif")
-  
-  if(variable == "temp") {
-    bioclim_chelsa <- raster::raster("data/CHELSA_bio10_01.tif")
-  }
-  
-  if(variable == "prec") {
-    bioclim_chelsa <- raster::raster("data/CHELSA_bio10_12.tif")
-  }
-  
-  bioclim_chelsa_au <- raster::crop(bioclim_chelsa, raster::extent(au_map))
-  
-  new.bioclim_chelsa <- raster::projectRaster(bioclim_chelsa_au, au_map)
-  
-  au_bioclim_chelsa <- raster::mask(new.bioclim_chelsa, au_map)
-  
-  sp::plot(au_bioclim_chelsa, main = "CHELSA")
-}
-
 plot_worldclim_climate_data <- function(variable = c("temp","prec")) {
-  
+
   library(raster)
-  
+
   # Download bioclim data using library (raster)
   bioclim <- getData("worldclim", var = "bio", res = 10)
-  
+
   if(variable == "temp"){
-    # Pick BIO1 (Mean Annual Temperature; T) 
+    # Pick BIO1 (Mean Annual Temperature; T)
     bioclim <- bioclim[[c(1)]]
   }
-  
+
   if(variable == "prec"){
-    # Pick BI12 (Annual Precipitation; P) 
+    # Pick BI12 (Annual Precipitation; P)
     bioclim <- bioclim[[c(12)]]
-  }  
-  
+  }
+
   # Load Australia landmass binary map
   au_map <- raster("data/australia.tif")
-  
+
   # Clip bioclim data with the au map
   ## crop and mask
   bioclim_au <- crop(bioclim, extent(au_map)) #%>% mask(.,au_map)

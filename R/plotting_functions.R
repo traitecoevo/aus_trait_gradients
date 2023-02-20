@@ -115,18 +115,19 @@ get_node_tree<-function(x, t=tree$scenario.2$run.1){
 #'
 #' @examples
 produce_site_map <- function(df, lat, lon, feature=NA){
+
   site_map <- au_basemap +
-    geom_pointdensity(
-      data = {{df}},
-      aes(y = !!as.name(lat),
-          x = !!as.name(lon)),
+    geom_point(
+      data = df,
+      aes(y = longitude,
+          x = latitude)) -> p,
       inherit.aes = FALSE,
       show.legend = TRUE,
       adjust = 1,
       size = 0.5,
       alpha=0.8
     ) +
-    scale_color_viridis(option = "plasma") +
+    scale_color_viridis_b(option = "plasma") +
     theme(
       legend.justification = c(-0.1, 0),
       legend.position = c(0.05, 0.05),

@@ -42,7 +42,8 @@ source("R/load_terraclimate.R")
 source("R/compile_terraclimate.R")
 source("R/figure_opt_plot.R")
 source("R/new_iteration_environment_extractor.R")
-source("R/plot_whittaker_biomes.R")
+source("R/loading data.R")
+# source("R/plot_whittaker_biomes.R")
 
 library(lubridate)
 library(R.utils)
@@ -108,7 +109,8 @@ field_traits <- traits %>%
                             "Australian National University glasshouse","MU_campus",
                             "Australian National Botanic Gardens","Australian National University"))) %>%
   filter(!(dataset_id %in% c("Kooyman_2011") & trait_name == "wood_density")) %>%
-  filter(!(dataset_id %in% c("Wells_2012") & trait_name %in% c("seed_mass","wood_density")))
+  filter(!(dataset_id %in% c("Wells_2012") & trait_name %in% c("seed_mass","wood_density"))) %>%
+  filter(is.na(context_name) | context_name != "measurements made on INNER CANOPY branches in DROUGHT  plot")
 
 ```
 
@@ -271,6 +273,30 @@ woody_field_traits_georef_tree_form %>%
   bind_rows(compound_leaf) -> woody_field_traits_georef_tree_form
 ```
 
+
+```{r}
+erroneous_values <- read_csv("data/erroneous_values.csv")
+
+woody_field_traits_georef_tree_form %>%
+  left_join(erroneous_values, na_matches = "never")
+
+
+erroneous_list <- vector("list", nrow(erroneous_values))
+
+for(i in 1:nrow(erroneous_values)){
+  erroneous_data <- erroneous_values[i,] %>% select_if(~ !any(is.na(.)))
+  erroneous_data <- woody_field_traits_georef_tree_form %>% left_join(erroneous_data) %>% drop_na(erroneous)
+  erroneous_list[[i]] <- erroneous_data
+}
+
+woody_field_traits_georef_tree_form_error <- left_join(woody_field_traits_georef_tree_form,bind_rows(erroneous_list))
+```
+
+```{r}
+woody_field_traits_georef_tree_form_error %>%
+  filter(is.na(erroneous)) -> woody_field_traits_georef_tree_form
+```
+
 Calculate leaf_N_per_area and leaf_area for additional observations:
 ```{r include=FALSE}
 woody_field_traits_georef_tree_form %>% 
@@ -323,39 +349,61 @@ calculated_data %>%
 ```
 
 ```{r}
-erroneous_values <- read_csv("data/erroneous_values.csv")
-
-woody_field_traits_georef_tree_form %>% 
-  left_join(erroneous_values, na_matches = "never")
-
-
-erroneous_list <- vector("list", nrow(erroneous_values))
-
-for(i in 1:nrow(erroneous_values)){
-  erroneous_data <- erroneous_values[i,] %>% select_if(~ !any(is.na(.)))
-  erroneous_data <- woody_field_traits_georef_tree_form %>% left_join(erroneous_data) %>% drop_na(erroneous)
-  erroneous_list[[i]] <- erroneous_data
-}
-
-woody_field_traits_georef_tree_form_error <- left_join(woody_field_traits_georef_tree_form,bind_rows(erroneous_list))
+woody_field_traits_georef_tree_form %>%
+  filter(trait_name == "leaf_delta13C") %>%
+  mutate(trait_name = "leaf_capital_delta13C") %>%
+  mutate(value = (-8/1000 - value/1000)/(1 + value/1000)*1000) -> leaf_Delta13C_calculated
 ```
+
 
 Bind all calculated data to the summarised data frame
 ```{r}
-woody_field_traits_georef_tree_form_error %>%
-  filter(is.na(erroneous)) %>%
+woody_field_traits_georef_tree_form %>%
   bind_rows(leaf_N_per_area_calcuated) %>%
   bind_rows(leaf_area_calcuated) %>%
   bind_rows(specific_leaf_area_calcuated) %>%
+  bind_rows(leaf_Delta13C_calculated) %>%
   group_by(site_name, taxon_name, dataset_id, trait_name, ID, latitude, longitude) %>%
   summarise(value=mean(value, na.rm=T)) %>%
-  ungroup() -> woody_field_traits_georef_tree_form
+  ungroup() -> woody_field_traits_georef_tree_form_mean
 ```
 
 ```{r}
-paste("data/WC copy/", list.files("data/WC copy"), sep = "")[1:6] %>%
-  map(extract_compile_data, data_source = "WC", woody_field_traits_georef_tree_form) %>%
-  bind_rows() -> WC_data
+future::plan("multisession", workers = 4)
+```
+
+```{r}
+source("R/loading data.R")
+climate_data <- load_climate_data(woody_field_traits_georef_tree_form_mean)
+```
+
+
+
+
+
+```{r}
+list.files("data/climate_data/WC", full.names = TRUE) %>%
+  map(extract_compile_data, data_source = "WC", woody_field_traits_georef_tree_form) -> WC_list
+WC_list %>% 
+ bind_rows() %>%
+  select(-month, -buffer_extracted) %>%
+  pivot_wider(values_from = value, names_from = env_name) %>%
+  unnest(elev, prec,srad, tavg, tmax) %>%
+  group_by(ID, longitude, latitude) %>%
+  mutate(elev_WC = elev,
+            prec_WC = sum_no_NA(prec),
+            srad_WC = mean(srad, na.rm = T),
+            tavg_WC = mean(tavg, na.rm = T),
+            tmax_WC = max(tmax, na.rm = T)) %>%
+  select(elev_WC, prec_WC, srad_WC,tavg_WC, tmax_WC) %>%
+  distinct(ID, longitude, latitude,.keep_all = TRUE) -> asd
+
+asd %>% View()
+  
+climate_data %>%
+  left_join(asd, by = c("ID", "latitude", "longitude")) %>% 
+  ggplot(aes(x = prec_WC.y, y = prec_WC.x)) +
+  geom_point()
 ```
 
 ```{r}
@@ -370,13 +418,13 @@ climate_data <- readRDS("data/climate_data.RDS") %>%
 ```
 
 ```{r}
-woody_field_traits_georef_tree_form <- woody_field_traits_georef_tree_form %>%
+woody_field_traits_georef_tree_form_mean <- woody_field_traits_georef_tree_form_mean %>%
   left_join(climate_data)
 ```
 
 ```{r}
 #define the core traits to focus on
-core_traits <- c("huber_value","leaf_delta13C","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height","leaf_area_calc","seed_mass")
+core_traits <- c("huber_value","leaf_capital_delta13C","leaf_N_per_area_calc","specific_leaf_area_calc","wood_density","plant_height","leaf_area_calc","seed_mass")
 ```
 
 
@@ -403,12 +451,11 @@ First, let's calculate the correlations between the traits and the environmental
 
 ```{r}
 #turn the trait data into a wide format for correlation analyses
-woody_field_traits_georef_tree_form %>%
+woody_field_traits_georef_tree_form_mean %>%
   filter(trait_name %in% core_traits) %>%
   dplyr::select(trait_name, value, Temp = avg_temp_WC, GDD_5 = GDD_5_envirem, VPD = vpd_terraclim, SWdown = solar_WC, Prec = prec_AWAP, Prec_CV = Prec_CV_BC, Max_temp = max_temp_BC, elev = elev_WC, PET = PET_envirem, Temp_5 = avg_temp_WC_5, latitude,longitude,site_name, taxon_name, dataset_id, ID) %>%
   mutate(MI = Prec/PET) %>%
   pivot_wider(values_from = value, names_from = trait_name) -> woody_field_traits_georef_tree_form_wide
-
 
 woody_field_traits_georef_tree_form_wide %>%
   mutate(log_leaf_area = log(leaf_area_calc),
@@ -422,11 +469,10 @@ woody_field_traits_georef_tree_form_wide %>%
          log_Prec = log(Prec),
          log_MI = log(MI),
          log_Prec_CV = log(Prec_CV),
-         sqrt_elev = sqrt(elev),
-         `leaf_delta13C (-)` = -1*leaf_delta13C) -> woody_field_traits_georef_tree_form_climate_wide
+         sqrt_elev = sqrt(elev)) -> woody_field_traits_georef_tree_form_climate_wide
 
 woody_field_traits_georef_tree_form_climate_wide %>%
-  pivot_longer(names_to = "trait_name", cols = c(leaf_area_calc, log_leaf_area, seed_mass, log_seed_mass, specific_leaf_area_calc, log_SLA, wood_density, log_wood_dens, leaf_N_per_area_calc, log_leaf_N, plant_height, log_height, huber_value, log_huber, leaf_delta13C, `leaf_delta13C (-)`)) -> woody_field_traits_georef_tree_form_climate
+  pivot_longer(names_to = "trait_name", cols = c(leaf_area_calc, log_leaf_area, seed_mass, log_seed_mass, specific_leaf_area_calc, log_SLA, wood_density, log_wood_dens, leaf_N_per_area_calc, log_leaf_N, plant_height, log_height, huber_value, log_huber, leaf_capital_delta13C)) -> woody_field_traits_georef_tree_form_climate
 
 
 
@@ -451,7 +497,7 @@ hist(log(woody_field_traits_georef_tree_form_climate_wide$leaf_N_per_area_calc))
 hist(log(woody_field_traits_georef_tree_form_climate_wide$plant_height))
 hist(log(woody_field_traits_georef_tree_form_climate_wide$huber_value))
 hist(log(woody_field_traits_georef_tree_form_climate_wide$seed_mass))
-hist(woody_field_traits_georef_tree_form_climate_wide$`leaf_delta13C (-)`)
+hist(woody_field_traits_georef_tree_form_climate_wide$leaf_capital_delta13C)
 
 #all traits bar wood density will be log transformed. leafdelta13c will be mutated by *-1 to put on positive scale
 ```
@@ -466,7 +512,28 @@ library(corrplot)
 woody_field_traits_georef_tree_form_climate_wide %>%
   dplyr::select(-c(,site_name, taxon_name, dataset_id, ID)) -> for_corrplot
 trait_env_correlation<- cor(for_corrplot, use="pairwise.complete.obs")
-corrplot::corrplot(trait_env_correlation[c("Temp","Temp_5","Max_temp","GDD_5","log_VPD","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev"),c("Temp","Temp_5","Max_temp","GDD_5","log_VPD","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev")], method="ellipse", type = "upper")
+
+corrplot_example <- trait_env_correlation[c("Temp","Temp_5","Max_temp","GDD_5","log_VPD","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev"),c("Temp","Temp_5","Max_temp","GDD_5","log_VPD","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev")]
+
+colnames(corrplot_example) <- c("MAT", "MAT > 5C", "Max Temp","GDD_5","log(VPD)","SWDown","log(MAP)","PET", "log(MI)", "log(Prec seasonality)","sqrt(Elevation)")
+rownames(corrplot_example) <- c("MAT", "MAT > 5C", "Max Temp","GDD_5","log(VPD)","SWDown","log(MAP)","PET", "log(MI)", "log(Prec seasonality)","sqrt(Elevation)")
+
+corrplot::corrplot(corrplot_example, method="ellipse", type = "upper")
+
+dev.off()
+
+png("output/supps_ellipse_environmental_refined.png", height=1300, width=2000, res=275)
+
+
+corrplot_example <- trait_env_correlation[c("Temp","log_VPD","SWdown","sqrt_elev","log_Prec"),c("Temp","log_VPD","SWdown","sqrt_elev","log_Prec")] 
+
+
+
+colnames(corrplot_example) <- c("MAT", "log(VPD)", "SWDown","sqrt(Elevation)","log(MAP)")
+rownames(corrplot_example) <- c("MAT", "log(VPD)", "SWDown","sqrt(Elevation)","log(MAP)")
+
+
+corrplot::corrplot(corrplot_example, method="ellipse", type = "upper")
 
 dev.off()
 ```
@@ -481,10 +548,26 @@ png("output/supps_ellipse.png", height=1300, width=2000, res=275)
 
 library(corrplot)
 
+
 woody_field_traits_georef_tree_form_climate_wide %>%
   select(-c(,site_name, taxon_name, dataset_id, ID)) -> for_corrplot
 trait_env_correlation<- cor(for_corrplot, use="pairwise.complete.obs")
-corrplot::corrplot(trait_env_correlation[c("log_seed_mass","leaf_delta13C (-)","log_leaf_area","log_SLA","log_wood_dens","log_leaf_N","log_height","log_huber"),c("Temp","Max_temp","GDD_5","log_VPD","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev")], method="ellipse")
+corrplot::corrplot(trait_env_correlation[c("log_seed_mass","leaf_capital_delta13C","log_leaf_area","log_SLA","log_wood_dens","log_leaf_N","log_height","log_huber"),c("Temp","Max_temp","GDD_5","log_VPD","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev")], method="ellipse")
+
+dev.off()
+
+corrplot_example <- trait_env_correlation[c("log_seed_mass","leaf_capital_delta13C","log_leaf_area","log_SLA","log_wood_dens","log_leaf_N","log_height","log_huber"),c("Temp","log_VPD","SWdown","sqrt_elev","log_Prec")] 
+
+
+
+colnames(corrplot_example) <- c("MAT", "log(VPD)", "SWDown","sqrt(Elevation)","log(MAP)")
+rownames(corrplot_example) <- c("log(Seed mass)","Leaf Delta13c","log(Leaf area)","log(SLA)","log(Wood density)", "log(Leaf N)", "log(Height)","log(Huber value)")
+
+
+
+png("output/supps_ellipse_presentation.png", height=1300, width=1500, res=180)
+
+corrplot::corrplot(corrplot_example, method = "ellipse")
 
 dev.off()
 ```
@@ -622,98 +705,171 @@ dev.off()
 Optimality figure
 
 ```{r}
-library(ggpubr)
 
-trait_to_plot <- c("leaf_N_per_area_calc")
+woody_field_traits_georef_tree_form_climate %>% 
+  filter(trait_name == "specific_leaf_area_calc") %>%
+  mutate(value = 1/value, trait_name = "leaf_mass_per_area") -> leaf_mass_per_area_data
 
-sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("a"),")",sep=""))
+woody_field_traits_georef_tree_form_climate %>%
+  bind_rows(leaf_mass_per_area_data) -> woody_field_traits_georef_tree_form_climate
 
-  woody_field_traits_georef_tree_form_climate %>%
-    dplyr::select(trait_name, value, VPD)%>%
-    pivot_longer(-c("trait_name", "value"), names_to = "env", values_to = "env_value")%>%
-    left_join(sub_labels) %>%
-    filter(trait_name == "leaf_N_per_area_calc") %>%
-    mutate(cor = round(cor(value, env_value, use = "pairwise.complete.obs"), digits = 2)) %>%
-    drop_na(value) %>%
-    ggplot(aes(env_value, value,group = trait_name)) +
-    geom_point() + 
-    scale_y_log10() +
-    scale_x_log10() +
-    theme_bw() + 
-    # theme(axis.title.x = element_blank())++ 
-    xlab("Vapour pressure deficit (kPa)") +
-    ylab(expression("Leaf nitrogen per area (g"~m^{-2}~")")) + 
-    theme(text=element_text(size=15)) +
-    geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
-            hjust = "inward", vjust = "inward",
-            inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
-    geom_text(mapping = aes(x = 0, y = 0, label = paste("r = ",cor), group=env),
-            hjust = "left", vjust = "bottom",
-                inherit.aes = FALSE, size = 6) -> a
+  trait_vector <- c("seed_mass","leaf_capital_delta13C","leaf_area_calc","specific_leaf_area_calc","wood_density","leaf_N_per_area_calc","plant_height","huber_value","leaf_mass_per_area")
   
-  
-sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("b"),")",sep=""))
+  expression_vector <- parse(text= c(paste(expression(Seed~mass~(mg)), sep=""), 
+                        expression(paste(Delta^13~C," (\u2030)")),
+                        expression(Leaf~area~(mm^2)),
+                       expression(Specific~leaf~area~(mm^2~mg^{-1})),
+                       expression(Wood~density~(mg~mm^{-3})),
+                       expression(Leaf~N~(mg~mm^{-2})),
+                       expression(Plant~height~(m)),
+                       expression(Huber~value~(mm^{2}~sapwood~mm^{-2}~leaf)),
+                       expression(Leaf~mass~per~area~(mg~mm^{-2}))))
 
-  woody_field_traits_georef_tree_form_climate %>%
-    dplyr::select(trait_name, value, Temp_5)%>%
-    pivot_longer(-c("trait_name", "value"), names_to = "env", values_to = "env_value")%>%
-    left_join(sub_labels) %>%
-    filter(trait_name == "leaf_N_per_area_calc") %>%
-    mutate(cor = round(cor(value, env_value, use = "pairwise.complete.obs"), digits = 2)) %>%
-    drop_na(value) %>%
-    ggplot(aes(env_value, value,group = trait_name)) +
-    geom_point() + 
-    scale_y_log10() +
-    scale_x_log10() +
-    theme_bw() + 
-    # theme(axis.title.x = element_blank())++ 
-    xlab("Vapour pressure deficit (kPa)") +
-    ylab(expression("Leaf nitrogen per area (g"~m^{-2}~")")) + 
-    theme(text=element_text(size=15)) +
-    geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
-            hjust = "inward", vjust = "inward",
-            inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
-    geom_text(mapping = aes(x = 0, y = 0, label = paste("r = ",cor), group=env),
-            hjust = "left", vjust = "bottom",
-                inherit.aes = FALSE, size = 6) -> b
-  
 
   
-  
-    woody_field_traits_georef_tree_form_climate %>%
-    dplyr::select(trait_name, value, Prec)%>%
-    pivot_longer(-c("trait_name", "value"), names_to = "env", values_to = "env_value")%>%
-    left_join(sub_labels) %>%
-    filter(trait_name == "leaf_N_per_area_calc") %>%
-    mutate(cor = round(cor(value, env_value, use = "pairwise.complete.obs"), digits = 2)) %>%
-    drop_na(value) %>%
-    ggplot(aes(env_value, value,group = trait_name)) +
-    geom_point() + 
-    scale_y_log10() +
-    scale_x_log10() +
-    theme_bw() + 
-    # theme(axis.title.x = element_blank())++ 
-    xlab("Precipitaiton (mm)") +
-    ylab(expression("Leaf nitrogen per area (g"~m^{-2}~")")) + 
-    theme(text=element_text(size=15)) +
-    geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
-            hjust = "inward", vjust = "inward",
-            inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
-    geom_text(mapping = aes(x = 0, y = 0, label = paste("r = ",cor), group=env),
-            hjust = "left", vjust = "bottom",
-                inherit.aes = FALSE, size = 6) -> b
-  
-  trait_vector <- c("seed_mass","leaf_delta13C (-)","leaf_area_calc","specific_leaf_area_calc","wood_density","leaf_N_per_area_calc","plant_height","huber_value")
-  expression_vector <- c(expression(Seed~mass),expression(Delta~13_c))
-  
-  asd <- (parse(text= c(paste(expression(Seed~mass~(mg)), sep=""), paste(expression(Delta~C[13]), sep="")) ))
-
-  p <- list()
-  for(i in 1:length(trait_vector)){
+  prec <- list()
+  for(i in 1:9){
       woody_field_traits_georef_tree_form_climate %>%
     dplyr::select(trait_name, value, Prec)%>%
     pivot_longer(-c("trait_name", "value"), names_to = "env", values_to = "env_value")%>%
-    left_join(sub_labels) %>%
+    # left_join(sub_labels) %>%
+    filter(trait_name == trait_vector[[i]]) %>%
+    mutate(cor = round(cor(value, env_value, use = "pairwise.complete.obs"), digits = 2)) %>%
+    drop_na(value, env_value) %>%
+    group_by(trait_name) %>%
+    mutate(n = n()) %>%
+    ungroup() %>%
+    ggplot(aes(env_value, value,group = trait_name)) +
+    geom_point() + 
+    scale_y_log10() +
+    scale_x_log10() +
+    theme_classic() + 
+    # theme(axis.title.x = element_blank())++ 
+    xlab("Precipitation (mm)") +
+    ylab(expression_vector[i]) +
+    theme(text=element_text(size=20)) +
+    # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
+    #         hjust = "inward", vjust = "inward",
+    #         inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
+    geom_text(mapping = aes(x = 0, y = 0, label = paste("r = ",cor, " n = ", n), group=env),
+                inherit.aes = FALSE, size = 6, vjust = -1, hjust = -0.125) +
+    geom_smooth(method = "lm") -> prec[[i]]
+}
+  
+png("output/leaf_delta13c_prec.png", height=1300, width=2000, res = 200)
+prec[[2]]
+dev.off()    
+
+png("output/leaf_area_prec.png", height=1300, width=2000, res = 200)
+prec[[3]]
+dev.off()    
+
+
+png("output/specific_leaf_area_prec.png", height=1300, width=2000, res = 200)
+prec[[4]]
+dev.off()    
+
+png("output/wood_density_prec.png", height=1300, width=2000, res = 200)
+prec[[5]]
+dev.off()    
+
+png("output/leaf_N_prec.png", height=1300, width=2000, res = 200)
+prec[[6]]
+dev.off()    
+
+png("output/height_prec.png", height=1300, width=2000, res = 200)
+prec[[7]]
+dev.off()
+
+png("output/HV_prec.png", height=1300, width=2000, res = 200)
+prec[[8]]
+dev.off()
+
+
+prec[[9]] +
+  xlab("") -> prec[[9]]
+
+png("output/height_lma_PREC.png", height=1200, width=1600, res = 150)
+cowplot::plot_grid( prec[[9]], prec[[7]], nrow = 2)
+dev.off()
+
+
+png("output/leaf_delta13c_VPD.png", height=1300, width=2000, res = 200)
+vpd[[2]]
+dev.off()  
+  
+
+  prec <- list()
+  for(i in 1:8){
+     woody_field_traits_georef_tree_form_climate %>%
+       mutate(Eucalypt = grepl("Eucalypt", taxon_name, fixed = TRUE) | grepl("Corymbia", taxon_name, fixed = TRUE) | grepl("Angophora", taxon_name, fixed = TRUE)) %>%
+    dplyr::select(trait_name, value, Prec, Eucalypt)%>%
+    pivot_longer(-c("trait_name", "value", "Eucalypt"), names_to = "env", values_to = "env_value")%>%
+    # left_join(sub_labels) %>%
+    dplyr::filter(trait_name == trait_vector[[i]]) %>%
+    mutate(cor = round(cor(value, env_value, use = "pairwise.complete.obs"), digits = 2)) %>%
+    drop_na(value, env_value) %>%
+    group_by(trait_name) %>%
+    mutate(n = n()) %>%
+    ungroup() %>%
+    ggplot(aes(env_value, value,group = trait_name)) +
+    geom_point(aes(colour = Eucalypt)) + 
+    scale_y_log10() +
+    scale_x_log10() +
+    theme_classic() + 
+    # theme(axis.title.x = element_blank())++ 
+    xlab("Precipitation (mm)") +
+    ylab(expression_vector[i]) +
+    theme(text=element_text(size=20)) +
+    # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
+    #         hjust = "inward", vjust = "inward",
+    #         inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
+    geom_text(mapping = aes(x = 0, y = 0, label = paste("r = ",cor, " n = ", n), group=env),
+                inherit.aes = FALSE, size = 6, vjust = -1, hjust = -0.125) +
+    geom_smooth(aes(group = Eucalypt, colour = Eucalypt), method = "lm") -> prec[[i]]
+  }
+  
+png("output/leaf_delta13c_prec.png", height=1300, width=2000, res = 200)
+prec[[2]]
+dev.off()    
+
+png("output/leaf_area_prec.png", height=1300, width=2000, res = 200)
+prec[[3]]
+dev.off()    
+
+
+png("output/specific_leaf_area_prec.png", height=1300, width=2000, res = 200)
+prec[[4]]
+dev.off()    
+
+png("output/wood_density_prec.png", height=1300, width=2000, res = 200)
+prec[[5]]
+dev.off()    
+
+png("output/leaf_N_prec.png", height=1300, width=2000, res = 200)
+prec[[6]]
+dev.off()    
+
+png("output/height_prec.png", height=1300, width=2000, res = 200)
+prec[[7]]
+dev.off()
+
+png("output/HV_prec.png", height=1300, width=2000, res = 200)
+prec[[8]]
+dev.off()
+
+png("output/leaf_delta13c_VPD.png", height=1300, width=2000, res = 200)
+vpd[[2]]
+dev.off()  
+
+  
+
+vpd <- list()
+  for(i in 1:8){
+      woody_field_traits_georef_tree_form_climate %>%
+    dplyr::select(trait_name, value, VPD)%>%
+    pivot_longer(-c("trait_name", "value"), names_to = "env", values_to = "env_value")%>%
+    # left_join(sub_labels) %>%
     filter(trait_name == trait_vector[[i]]) %>%
     mutate(cor = round(cor(value, env_value, use = "pairwise.complete.obs"), digits = 2)) %>%
     drop_na(value) %>%
@@ -723,84 +879,181 @@ sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("b"),")",sep=""
     scale_x_log10() +
     theme_classic() + 
     # theme(axis.title.x = element_blank())++ 
-    xlab("Precipitation (mm)") +
-    ylab(asd[[2]]) +
+    xlab("Vapour pressure deficit (kPa)") +
+    ylab(expression_vector[i]) +
     theme(text=element_text(size=15)) +
-    geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
-            hjust = "inward", vjust = "inward",
-            inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
-    geom_text(mapping = aes(x = 0, y = 0, label = paste("r = ",cor), group=env),
-            hjust = "left", vjust = "bottom",
-                inherit.aes = FALSE, size = 6) +
-    geom_smooth(method = "lm")-> p[[i]]
-}
-  
-  
-  corrplot::corrplot(trait_env_correlation[c("log_seed_mass","leaf_delta13C (-)","log_leaf_area","log_SLA","log_wood_dens","log_leaf_N","log_height","log_huber"),c("Temp","Max_temp","GDD_5","log_VPD","SWdown","log_Prec","PET","log_MI","log_Prec_CV","sqrt_elev")], method="ellipse")
-  
-trait_to_plot <- c("ci_over_ca_from_c13")
+    # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
+    #         hjust = "inward", vjust = "inward",
+    #         inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
+   geom_text(mapping = aes(x = 0, y = 0, label = paste("r = ",cor), group=env),
+                inherit.aes = FALSE, size = 6, vjust = -1, hjust = -0.25) +
+    geom_smooth(method = "lm") -> vpd[[i]]
+  }  
 
-sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("b"),")",sep=""))
+list(vpd[[2]], vpd[[6]])
 
-figure_opt_plot("VPD_WC", logit="yes") -> b
-b + ylab(expression(logit(chi))) -> b
-
-trait_to_plot <- c("leaf_area_calc")
-
-sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("c"),")",sep=""))
-
-figure_opt_plot("VPD_WC", logit="no") -> c
-c + ylab(expression(Leaf~area~(mm^2))) -> c
-
-trait_to_plot <- c("huber_value")
-
-sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("d"),")",sep=""))
-figure_opt_plot("VPD_WC", logit="no") -> d
-d + ylab(expression(Huber~value)) -> d
-
-
-trait_to_plot <- c("leaf_N_per_area_calc")
-
-sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("e"),")",sep=""))
-
-figure_opt_plot_log_x("avg_temp_WC", logit="no") -> e
-e + ylab(expression(Leaf~N~per~area~(mg~mm^{-2}))) -> e
-
-trait_to_plot <- c("ci_over_ca_from_c13")
-
-sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("f"),")",sep=""))
-
-figure_opt_plot_log_x("avg_temp_WC", logit="yes") -> f
-f + ylab(expression(logit(chi))) -> f
-
-trait_to_plot <- c("leaf_area_calc")
-
-sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("g"),")",sep=""))
-figure_opt_plot_log_x("avg_temp_WC", logit="no") -> g
-g + ylab(expression(Leaf~area~(mm^2))) -> g
-
-trait_to_plot <- c("huber_value")
-
-sub_labels <- tibble(trait_name = trait_to_plot, label = paste(c("h"),")",sep=""))
-figure_opt_plot_log_x("avg_temp_WC", logit="no") -> h
-h + ylab(expression(Huber~value)) -> h
-
-ggpubr::ggarrange(a,b,c,d, nrow=1) -> figure_top
-ggpubr::ggarrange(e,f,g,h, nrow=1) -> figure_bottom
-
-ggpubr::annotate_figure(figure_top,
-                bottom = text_grob(expression(Vapour~pressure~deficit~(kPa))))-> figure_top
-
-ggpubr::annotate_figure(figure_bottom,
-                bottom = text_grob(expression(Mean~annual~temperature~(degree*C)))) -> figure_bottom
-
-
-
-png("output/optimality_figure_log_test.png", height=2000, width=4500, res=350)
-
-ggpubr::ggarrange(figure_top, figure_bottom, nrow=2)
-
+png("output/leaf_Delta13c_VPD.png", height=1300, width=2000, res = 200)
+vpd[[2]]
 dev.off()
+
+
+png("output/leaf_N_VPD.png", height=1300, width=2000, res = 200)
+vpd[[6]]
+dev.off()
+
+
+srad <- list()
+  for(i in 1:8){
+      woody_field_traits_georef_tree_form_climate %>%
+      mutate(SWdown = SWdown /1000) %>%
+    dplyr::select(trait_name, value, SWdown)%>%
+    pivot_longer(-c("trait_name", "value"), names_to = "env", values_to = "env_value")%>%
+    # left_join(sub_labels) %>%
+    filter(trait_name == trait_vector[[i]]) %>%
+    mutate(cor = round(cor(value, env_value, use = "pairwise.complete.obs"), digits = 2)) %>%
+    drop_na(value) %>%
+    ggplot(aes(env_value, value,group = trait_name)) +
+    geom_point() + 
+    scale_y_log10() +
+    scale_x_log10() +
+    theme_classic() + 
+    # theme(axis.title.x = element_blank())++ 
+    xlab(expression(paste(Solar~radiation~(MJ~m^{-2}~day^{-1})))) +
+    ylab(expression_vector[i]) +
+    theme(text=element_text(size=15)) +
+    # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
+    #         hjust = "inward", vjust = "inward",
+    #         inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
+   geom_text(mapping = aes(x = 0, y = 0, label = paste("r = ",cor), group=env),
+                inherit.aes = FALSE, size = 6, vjust = -1, hjust = -0.25) +
+    geom_smooth(method = "lm") -> srad[[i]]
+  }  
+
+
+
+p <- list()
+  for(i in 1:8){
+      woody_field_traits_georef_tree_form_climate %>%
+    dplyr::select(trait_name, value, Temp)%>%
+    pivot_longer(-c("trait_name", "value"), names_to = "env", values_to = "env_value")%>%
+    # left_join(sub_labels) %>%
+    filter(trait_name == trait_vector[[i]]) %>%
+    mutate(cor = round(cor(value, env_value, use = "pairwise.complete.obs"), digits = 2)) %>%
+    drop_na(value) %>%
+    ggplot(aes(env_value, value,group = trait_name)) +
+    geom_point() + 
+    scale_y_log10() +
+    theme_classic() + 
+    # theme(axis.title.x = element_blank())++ 
+    xlab(expression(Mean~annual~temperature~"(\u00B0C)")) +
+    ylab(expression_vector[i]) +
+    theme(text=element_text(size=15)) +
+    # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
+    #         hjust = "inward", vjust = "inward",
+    #         inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
+   geom_text(mapping = aes(x = -Inf, y = 0, label = paste("r = ",cor), group=env),
+                inherit.aes = FALSE, size = 6, vjust = -1, hjust = -0.25) +
+    geom_smooth(method = "lm") -> p[[i]]
+  }  
+list(p[[2]],p[[6]], p[[8]])
+
+
+
+png("output/leaf_Delta13c_MAT.png", height=1300, width=2000, res = 200)
+p[[2]]
+dev.off()
+
+
+png("output/leaf_N_MAT.png", height=1300, width=2000, res = 200)
+p[[6]]
+dev.off()
+
+png("output/leaf_HV_MAT.png", height=1300, width=2000, res = 200)
+p[[8]]
+dev.off()
+
+
+
+
+p <- list()
+  for(i in 1:8){
+      woody_field_traits_georef_tree_form_climate %>%
+    dplyr::select(trait_name, value, MI)%>%
+    pivot_longer(-c("trait_name", "value"), names_to = "env", values_to = "env_value")%>%
+    # left_join(sub_labels) %>%
+    filter(trait_name == trait_vector[[i]]) %>%
+    mutate(cor = round(cor(value, env_value, use = "pairwise.complete.obs"), digits = 2)) %>%
+    drop_na(value) %>%
+    ggplot(aes(env_value, value,group = trait_name)) +
+    geom_point() + 
+    scale_y_log10() +
+    theme_classic() + 
+    # theme(axis.title.x = element_blank())++ 
+    xlab(expression(Moisture~index)) +
+    ylab(expression_vector[i]) +
+    theme(text=element_text(size=15)) +
+    # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
+    #         hjust = "inward", vjust = "inward",
+    #         inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
+   geom_text(mapping = aes(x = -Inf, y = 0, label = paste("r = ",cor), group=env),
+                inherit.aes = FALSE, size = 6, vjust = -1, hjust = -0.25) +
+    geom_smooth(method = "lm") -> p[[i]]
+  }  
+list(p[[2]],p[[6]], p[[8]])
+
+png("output/leaf_delta13c_MI.png", height=1300, width=2000, res = 200)
+p[[2]]
+dev.off()
+
+
+  env_vector <- c("Temp","SWdown")
+  
+  expression_vector <- parse(text= c(paste(expression(Mean~annual~temperature~"(\u00B0C)"), sep=""), 
+                        expression(paste(Solar~radiation~(MJ~m^{-2}~day^{-1})))
+                        ))
+p <- list()
+
+for(i in 1:length(env_vector)){
+  woody_field_traits_georef_tree_form_climate %>%
+    mutate(SWdown = SWdown /1000) %>%
+    mutate(aridity = case_when(MI < 0.5 ~ "MI < 0.5",
+                           MI > 0.5 & MI < 1.0~"0.5 < MI < 1.5", 
+                           MI > 1.0 ~ "MI > 1.5")) %>%
+    mutate(aridity = recode_factor(aridity, "MI < 0.5"="MI < 0.5", "0.5 < MI < 1.5" = "0.5 < MI < 1.5", "MI > 1.5" = "MI > 1.5")) %>%
+    dplyr::select(trait_name, value, env_vector[i], aridity)%>%
+    pivot_longer(-c("trait_name", "value", "aridity"), names_to = "env", values_to = "env_value")%>%
+    filter(trait_name == "leaf_area_calc") %>%
+    drop_na(value) %>%
+    group_by(aridity) %>%
+    mutate(cor = round(cor(value, env_value, use = "pairwise.complete.obs"), digits = 2)) %>%
+    ggplot(aes(env_value, value)) +
+    geom_point() + 
+    scale_y_log10() +
+    scale_x_log10() +
+    theme_classic() + 
+    geom_smooth(method = "lm") +
+    facet_wrap(~aridity) + 
+    # theme(axis.title.x = element_blank())++ 
+    xlab(expression_vector[i]) +
+    ylab(expression(Leaf~area~(mm^{2}))) +
+    theme(text=element_text(size=18)) +
+    # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
+    #         hjust = "inward", vjust = "inward",
+    #         inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
+   geom_text(mapping = aes(x = 0, y = 0, label = paste("r = ",cor), group=env),
+                inherit.aes = FALSE, size = 6, vjust = -1, hjust = -0.25) +
+    geom_smooth(method = "lm") -> p[[i]]
+}  
+
+png("output/leaf_area_MAT_MI.png", height=1300, width=2000, res = 200)
+p[[1]]
+dev.off()
+
+
+png("output/leaf_area_solar_radiation_MI.png", height=1300, width=2000, res = 200)
+p[[2]]
+dev.off()
+
 ```
 
 ```{r}
