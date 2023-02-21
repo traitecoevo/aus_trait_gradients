@@ -417,6 +417,9 @@ dev.off()
 ```{r}
 source("R/loading data_test.R")
 climate_data <- load_climate_data(woody_field_traits_georef)
+climate_data <- readRDS("data/climate_data_simple.RDS")
+
+
 ```
 
 #Read in climate data
@@ -424,12 +427,11 @@ climate_data <- load_climate_data(woody_field_traits_georef)
 ```{r}
 woody_field_traits_georef %>%
   bind_rows(leaf_Delta13C_calculated) %>%
-  left_join(climate_data) %>% 
+  left_join(climate_data) %>%
+  dplyr::select(cell, taxon_name, trait_name, growth_form, woody_climber, elev, prec, srad, tavg , tmax, prec.cv, temp.cv, vpd,prec.wq, prec.dq,aridityIndexThornthwaite, climaticMoistureIndex, growingDegDays5, value, latitude, longitude) %>%
   group_by(cell, taxon_name, trait_name, growth_form, woody_climber, elev, prec, srad, tavg , tmax, prec.cv, temp.cv, vpd,prec.wq, prec.dq,aridityIndexThornthwaite, climaticMoistureIndex, growingDegDays5) %>%
   summarise(value=mean(value, na.rm=T), latitude = mean(latitude, na.rm = T), longitude = mean(latitude, na.rm = T)) %>%
   ungroup() -> woody_field_traits_georef_mean_climate
-
-woody_field_traits_georef_mean_climate %>% View()
 ```
 
 We will now inspect distribution of data in each study relative to total distribution to see if there is any erroneous data
