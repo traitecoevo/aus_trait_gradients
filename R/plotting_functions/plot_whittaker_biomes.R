@@ -44,7 +44,6 @@ austraits_climate_space <- function(core_trait){
   
    woody_field_traits_georef_mean_climate_wide %>%
     drop_na(core_trait) -> site_data
-  
   ggplot() +
   geom_polygon(
     data = Whittaker_biomes,
@@ -91,10 +90,16 @@ austraits_climate_space <- function(core_trait){
   }
 }
   else{
+    
+    browser()
+    
     woody_field_traits_georef_mean_climate_wide %>%
       pivot_longer(cols = c(core_traits)) %>%
       drop_na(value) %>%
-      distinct(cells, .keep_all = T) -> site_data
+      group_by(cell) %>%
+      nest() %>%
+      mutate(Temp = map_dbl(data, ~unique(.x$Temp)),
+             Prec = map_dbl(data, ~unique(.x$Prec)))-> site_data
         ggplot() +
       geom_polygon(
         data = Whittaker_biomes,
@@ -118,7 +123,7 @@ austraits_climate_space <- function(core_trait){
       theme_classic() +
       guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2))) +
       xlab(expression(Mean~annual~temperature~(degree * C))) +
-      ylab("Mean annual precipitation (mm)") +
+      ylab("Mean annual precipitation (mm/yr)") +
       theme(text = element_text(size = 12))  +
       theme(
         legend.justification = c(-0.1, 0),

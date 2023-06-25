@@ -1,14 +1,13 @@
 
 
 au_basemap <- function() {
-
-  au_map <- raster::raster("data/australia.tif") %>%
+  au_map <- terra::rast("data/australia.tif") %>%
     # aggregate(fact=6) %>%
-    raster::as.data.frame(xy = T)
+    terra::as.data.frame(xy = T)
 
   au_basemap <-
     ggplot() +
-    geom_raster(data = au_map, aes(
+    geom_tile(data = au_map, aes(
       x = x,
       y = y,
       fill = factor(australia)
