@@ -61,7 +61,7 @@ sum_no_NA <- function(x) if(all(is.na(x))) NA_integer_ else sum(x, na.rm=TRUE)
 
 ```{r}
 traits <- austraits$traits %>%
-  filter(trait_name %in% c("leaf_area","leaf_mass_per_area","leaf_N_per_dry_mass","leaf_N_per_area","wood_density","plant_height", "seed_dry_mass", "leaf_delta13C","huber_value")) %>%
+  filter(trait_name %in% c("leaflet_area","leaf_area","leaf_mass_per_area","leaf_N_per_dry_mass","leaf_N_per_area","wood_density","plant_height", "seed_dry_mass", "leaf_delta13C","huber_value")) %>%
   mutate(value = as.numeric(value))
 ```
 
@@ -75,7 +75,7 @@ We also remove all trait values which are records across multiple sites, are fro
 
 ```{r}
 field_traits %>%
-  filter(basis_of_value %in% c("measurement") | trait_name == "plant_height") -> field_traits
+  filter(basis_of_value %in% c("measurement")) -> field_traits
 ```
 
 
@@ -84,7 +84,7 @@ first need to work out which studies in the available dataset had looked at leaf
 ```{r}
 field_traits %>%
   filter(trait_name == "leaf_area") %>%
-  distinct(dataset_id) %>%
+  distinct(dataset_id) %>% 
   write_csv("data/leaf_compound_filter/datasets_with_leaf_area.csv")
 ```
 
@@ -100,13 +100,24 @@ austraits$traits %>%
   group_by(taxon_name) %>%
   mutate(num_types = n_distinct(value)) %>%
   ungroup() %>%
-  mutate(compoundness = if_else(num_types > 1 | value =="compound" | value == "compound simple", "compound", "simple")) %>% 
+  mutate(compoundness = if_else(num_types > 1 | value =="compound" | value == "compound simple", "compound", "simple")) %>%
   dplyr::select(-value) %>%
   distinct(taxon_name, .keep_all = T) %>%
   dplyr::select(compoundness, taxon_name) -> compound_taxa
-  
+#   
+# austraits$traits %>%
+#   filter(trait_name == "plant_photosynthetic_organ") %>%
+#   group_by(taxon_name) %>%
+#   mutate(num_types = n_distinct(value)) %>% 
+#   filter(num_types == 1) %>% 
+#   filter(value != "leaf") %>%
+#   distinct(taxon_name) %>%
+#   mutate(phyllode = "phyllode") -> phyllode_taxa
+
 field_traits_leaf_area %>%
   left_join(compound_taxa) %>% 
+  # filter((compound_species == "compound_present" & leaf_unit_measured %in% c(NA, "leaf"))) %>% filter(is.na(compoundness)) %>% distinct(taxon_name)
+  # left_join(phyllode_taxa) %>% 
   filter(!(compound_species == "compound_present" & leaf_unit_measured == "leaf" & compoundness %in% c(NA,"compound"))) -> field_traits_leaf_area_compound_removed
 ```
 
@@ -114,6 +125,16 @@ field_traits_leaf_area %>%
 field_traits %>%
   filter(!trait_name %in% c("leaf_area")) %>%
   bind_rows(field_traits_leaf_area_compound_removed) -> field_traits
+
+field_traits %>%
+  filter(trait_name == "leaflet_area") %>%
+  filter(dataset_id == "Wells_2012") %>%
+  distinct(taxon_name) -> compound_wells
+
+
+field_traits %>%
+  filter(!(trait_name == "leaf_area" & dataset_id == "Wells_2012" & taxon_name %in% compound_wells$taxon_name)) %>%
+  mutate(trait_name = ifelse(trait_name == "leaflet_area", "leaf_area",trait_name))-> field_traits
 ```
 
 ```{r}
@@ -520,7 +541,7 @@ fit_models <- function(...){
 ```{r}
 woody_field_traits_georef_mean_climate_wide %>%
   unnest(growth_form_data) %>%
-  drop_na(growth_form) %>% 
+  drop_na(growth_form) %>%
   # drop_na(AI_thorn) %>%
   dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_N, log_LMA, log_seed_mass, log_leaf_area, log_Prec, GDD_5, log_MI, log_VPD, AI_thorn,log_Prec_CV,temp_cv, log_prec_wq, sqrt_prec_dq, cell) %>%
   pivot_longer(cols = c(log_leaf_capital_delta13C, 
@@ -562,9 +583,6 @@ print(xtable(fit_quad_overall %>%
          "log(Wettest quarter precipitation)" = "log_prec_wq",
          "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
          "log(Moisture index)" = "log_MI") %>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_quad_overall_prec.tex")
-
-
-print(xtable(fit_lm_overall %>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_quad_overall.tex")
 
  
 woody_field_traits_georef_mean_climate_wide %>%
@@ -619,7 +637,7 @@ print(xtable(fit_quad_woody %>%
          "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_quad_woody_prec.tex")
 
 
-woody_field_traits_georef_mean_climate_wide %>%
+woody_field_traits_georef_mean_climate_wide %>% 
   unnest(growth_form_data) %>%
   drop_na(growth_form) %>% 
   filter(growth_form == "Woody" | woody_like_taxa == "Woody") %>%
