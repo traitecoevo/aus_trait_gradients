@@ -13,7 +13,6 @@ ms.tex
 data/author_list_email.csv
 data/Australia_GISdata_LTAym_AvgDailyTotals_GlobalSolarAtlas-v2_GEOTIFF/*
 wc2-5/*
-data/austraits-3.0.2.rds
-data/PAR_eMAST/*
-data/
+*.tif
 output/
+data/old_data/

@@ -1,0 +1,15 @@
+﻿dataset_id,trait_name,observation_id,taxon_name,reason,erroneous
+Kanowski_2000,leaf_mass_per_area,196,Endiandra insignis,,erroneous
+Prior_2003,leaf_N_per_area,061,Corymbia foelscheana,,erroneous
+Wright_2002,leaf_delta13C,072,Atriplex stipitata,,erroneous
+Burrows_2001,leaf_mass_per_area,216,Melichrus urceolatus,,erroneous
+Fonseca_2000,leaf_mass_per_area,1525,Xanthorrhoea sp. [Fonseca_2000],,erroneous
+Knox_2011,leaf_mass_per_area,13,Calytrix tetragona,,erroneous
+Schulze_1998,leaf_N_per_area,213,Grevillea pyramidalis,,erroneous
+OReillyNugent_2018,leaf_mass_per_area,022,Rumex acetosella,,erroneous
+Kanowski_2000,leaf_mass_per_area,276,Flindersia schottiana,,erroneous
+Kanowski_2000,leaf_mass_per_area,308,Litsea leefeana,,erroneous
+Kanowski_2000,leaf_N_per_area_calc,196,Endiandra insignis,,erroneous
+Kanowski_2000,leaf_N_per_area_calc,276,Flindersia schottiana,,erroneous
+Kanowski_2000,leaf_N_per_area_calc,308,Litsea leefeana,,erroneous
+Ooi_2007,seed_dry_mass,03397,Bauera rubioides,,erroneous

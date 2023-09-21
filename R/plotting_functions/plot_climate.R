@@ -85,7 +85,7 @@ plot_climate_space <- function(traits_sites, au_bioclim) {
 plot_site_map_by_trait <- function(trait_df) {
   df <-
     trait_df %>%
-    dplyr::select(location_name, latitude, longitude, trait_name) %>%
+    dplyr::select(location_name, latitude, longitude, trait_name, taxon_name) %>%
     filter(
       latitude > (-45), latitude < (-9.5), longitude < (153), longitude > (110)
     ) %>%
