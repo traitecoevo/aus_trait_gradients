@@ -1,0 +1,776 @@
+---
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+0---
+title: Report on data in AusTraits
+output:
+  html_document:
+    df_print: kable
+    highlight: tango
+    keep_md: no
+    smart: no
+    theme: yeti
+    toc: yes
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+editor_options:
+  chunk_output_type: console
+---
+
+Load data
+```{r, warning=FALSE, message=FALSE}
+# Load packages and functions for this analysis
+
+rm(list=ls())
+
+source("R/error_checking_functions/error_checking_function.R")
+
+#climate extraction functions
+source("R/climate_extraction_functions/load_climate_data.R")
+
+#plotting functions
+source("R/plotting_functions/plot_whittaker_biomes.R")
+source("R/plotting_functions/plot_climate.R")
+source("R/plotting_functions/plot_trait_by_dataset.R")
+
+
+library(xtable)
+library(lubridate)
+library(R.utils)
+library(tidyverse)
+library(corrplot)
+library(ggpointdensity)
+library(tagger)
+library(relaimpo)
+library(austraits)
+library(terra)
+# load trait data
+latest_version <- austraits::get_version_latest()
+austraits <- austraits::load_austraits(version = latest_version)
+```
+
+```{r}
+sum_no_NA <- function(x) if(all(is.na(x))) NA_integer_ else sum(x, na.rm=TRUE)
+```
+
+```{r}
+traits <- austraits$traits %>%
+  filter(trait_name %in% c("leaf_mass_per_area","wood_density","plant_height","huber_value","sapwood_specific_conductivity")) %>%
+  mutate(value = as.numeric(value))
+```
+
+```{r}
+traits %>%
+  filter(basis_of_record %in% c("field", "field, field_experiment")) %>%
+  filter(!(dataset_id == "Cheesman_2020" & (method_id %in% c("03","04") | treatment_id %in% c("03")))) -> field_traits
+```
+
+We also remove all trait values which are records across multiple sites, are from the literature, expert values, or are from unknown sources except for height in which we take all values
+
+```{r}
+field_traits %>%
+  filter(basis_of_value %in% c("measurement")) -> field_traits
+```
+
+```{r}
+austraits$traits %>%
+  filter(trait_name %in% c("woodiness_detailed"))  %>% 
+  filter(dataset_id == "Wenk_2022") %>%
+  filter(value %in% c("woody")) %>%
+  pull(taxon_name) %>%
+  unique() -> woody_taxa
+
+austraits$traits %>%
+  filter(trait_name %in% c("woodiness_detailed"))  %>% 
+  filter(dataset_id == "Wenk_2022") %>%
+  filter(!value %in% c("woody")) %>%
+  pull(taxon_name) %>%
+  unique() -> non_woody_taxa
+
+austraits$traits %>%
+  filter(trait_name %in% c("woodiness_detailed"))  %>% 
+  filter(dataset_id == "Wenk_2022") %>%
+  filter(value %in% c("woody_like_stem")) %>%
+  pull(taxon_name) %>%
+  unique() -> woody_like_taxa
+
+austraits$traits %>%
+  filter(trait_name %in% c("woodiness_detailed"))  %>% 
+  filter(dataset_id == "Wenk_2022") %>%
+  filter(value != c("woody_like_stem")) %>%
+  pull(taxon_name) %>%
+  unique() -> non_woody_like_taxa
+
+field_traits %>%
+  mutate(growth_form = case_when(taxon_name %in% woody_taxa ~ "Woody",
+                                 taxon_name %in% non_woody_taxa ~ "Non-woody"),
+         woody_like_taxa = case_when(taxon_name %in% woody_like_taxa ~ "Woody",
+                                 taxon_name %in% non_woody_like_taxa ~ "Non-woody")) %>%
+  group_by(taxon_name, growth_form, woody_like_taxa) %>%
+  nest() %>%
+  group_by(taxon_name) %>%
+  nest(growth_form_data = c(growth_form, woody_like_taxa)) %>%
+  unnest(data) -> woody_field_traits
+```
+
+```{r}
+erroneous_values <- read_csv("data/erroneous_values/erroneous_values.csv",trim_ws = TRUE)
+
+erroneous_list <- vector("list", nrow(erroneous_values))
+
+for(i in 1:nrow(erroneous_values)){
+
+  erroneous_data <- erroneous_values[i,] %>% dplyr::select_if(~ !any(is.na(.)))
+  erroneous_data <- woody_field_traits %>% ungroup() %>% left_join(erroneous_data) %>% drop_na(erroneous)
+  erroneous_list[[i]] <- erroneous_data
+}
+
+woody_field_traits <- left_join(woody_field_traits,bind_rows(erroneous_list))
+
+woody_field_traits %>%
+  filter(is.na(erroneous)) -> woody_field_traits
+```
+
+```{r}
+#where are sites located?
+location_of_sites <-
+  austraits$locations %>%
+  filter(location_property %in% c("longitude (deg)", "latitude (deg)")) %>%
+  spread(location_property, value) %>%
+  rowid_to_column("ID") %>%
+  rename(latitude = `latitude (deg)`, longitude = `longitude (deg)`) %>%
+  mutate_at(c("latitude", "longitude"), ~suppressWarnings(as.numeric(.x))) %>%
+  drop_na(longitude, latitude)
+```
+
+
+Create a new trait dataframe to only include observations with associated latitude and longitude
+```{r}
+woody_field_traits_georef <- woody_field_traits %>%
+  left_join(location_of_sites) %>%
+  drop_na(latitude,longitude)
+```
+
+```{r}
+#define the core traits to focus on
+core_traits <- c("leaf_mass_per_area","wood_density","plant_height","huber_value","sapwood_specific_conductivity")
+```
+
+```{r}
+climate_data <- load_climate_data(woody_field_traits_georef, simple_only = FALSE)%>% 
+  group_by(ID, cell) %>%
+  nest(.key = "climate_data")
+```
+
+#Read in climate data and join
+
+```{r}
+woody_field_traits_georef  %>%
+  left_join(climate_data) -> woody_field_traits_georef_climate
+```
+
+We will now inspect distribution of data in each study relative to total distribution to see if there is any erroneous data
+```{r eval=FALSE, include=FALSE}
+trait_by_dataset_core_traits<-function(trait, data){
+data %>%
+  distinct(dataset_id) -> dataset_index
+
+purrr::map(dataset_index$dataset_id, plot_trait_by_dataset, trait, data)
+}
+
+woody_field_traits_georef_climate %>%
+  group_by(trait_name) %>% 
+  nest() %>%
+  map2(.x = .$trait_name, .y = .$data, .f = ~trait_by_dataset_core_traits(.x, .y))
+```
+
+
+
+```{r}
+woody_field_traits_georef_climate %>% 
+  dplyr::select(cell, taxon_name, trait_name, value, climate_data, growth_form_data) %>%
+  group_by(cell, taxon_name, trait_name, climate_data, growth_form_data) %>%
+  nest(.key = "value") %>% 
+  mutate(value = map_dbl(value, ~mean(.x$value))) %>%
+  ungroup() -> woody_field_traits_georef_mean_climate
+```
+
+#Prep data for analysis
+First, let's calculate the correlations between the traits and the environmental variables. This is will be the key statistic which will be used for analysis.For starters, which traits and environmental variables are not normally distributed? We need to turn the data into a wide format.
+
+```{r}
+woody_field_traits_georef_mean_climate %>%
+  filter(trait_name %in% core_traits) %>%
+  pivot_wider(values_from = value, names_from = trait_name) %>%
+  unnest(climate_data) %>%
+  dplyr::rename(Temp = temp,
+                PET = annualPET, 
+                Prec = prec,
+                VPD = vpd, 
+                prec_cv = prec.cv, 
+                temp_cv = temp.cv, 
+                prec_wq = prec.wq, 
+                prec_dq = prec.dq, 
+                AI_thorn = aridityIndexThornthwaite, GDD_5 =  growingDegDays5) -> woody_field_traits_georef_mean_climate_wide
+  
+woody_field_traits_georef_mean_climate_wide %>%
+  mutate(MI = Prec/PET) %>%
+  mutate(log_MI = log(MI)) %>%
+  mutate(log_LMA = log(leaf_mass_per_area),
+         log_wood_dens = log(wood_density),
+         log_height = log(plant_height),
+         log_K_s = log(sapwood_specific_conductivity),
+         log_huber = log(huber_value),
+         log_VPD = log(VPD),
+         log_Prec = log(Prec),
+         log_prec_wq = log(prec_wq),
+         sqrt_prec_dq = sqrt(prec_dq),
+         log_Prec_CV = log(prec_cv)) -> woody_field_traits_georef_mean_climate_wide
+
+#environmental variables
+hist(woody_field_traits_georef_mean_climate_wide$Temp)
+hist(woody_field_traits_georef_mean_climate_wide$GDD_5)
+hist(log(woody_field_traits_georef_mean_climate_wide$VPD))
+hist(log(woody_field_traits_georef_mean_climate_wide$Prec))
+hist(sqrt(woody_field_traits_georef_mean_climate_wide$prec_dq))
+hist(log(woody_field_traits_georef_mean_climate_wide$prec_wq))
+
+hist(sqrt(woody_field_traits_georef_mean_climate_wide$elev))
+hist(log(woody_field_traits_georef_mean_climate_wide$MI))
+hist(log(woody_field_traits_georef_mean_climate_wide$prec_cv))
+
+#traits
+hist(log(woody_field_traits_georef_mean_climate_wide$leaf_area))
+hist(log(woody_field_traits_georef_mean_climate_wide$sapwood_specific_conductivity))
+
+hist(log(woody_field_traits_georef_mean_climate_wide$leaf_mass_per_area))
+hist(log(woody_field_traits_georef_mean_climate_wide$wood_density))
+hist(log(woody_field_traits_georef_mean_climate_wide$leaf_N_per_area_calc))
+hist(log(woody_field_traits_georef_mean_climate_wide$plant_height))
+hist(log(woody_field_traits_georef_mean_climate_wide$huber_value))
+hist(log(woody_field_traits_georef_mean_climate_wide$seed_dry_mass))
+hist(woody_field_traits_georef_mean_climate_wide$leaf_capital_delta13C)
+```
+
+
+First, just check relationships between environmental variables
+```{r}
+png("output/manuscript/supps_ellipse_environmental.png", height=1300, width=2000, res=300)
+
+library(corrplot)
+
+woody_field_traits_georef_mean_climate_wide %>%
+  drop_na(growth_form) %>%
+  distinct(cell, .keep_all = T) %>%
+  dplyr::select(-c(taxon_name,cell, growth_form, woody_climber)) -> for_corrplot
+trait_env_correlation<- cor(for_corrplot, use="pairwise.complete.obs")
+
+corrplot_example <- trait_env_correlation[c("Temp","GDD_5","log_VPD","SWdown","log_Prec","sqrt_elev","Max_temp", "MI","AI_thorn","log_Prec_CV","temp_cv","log_prec_wq","sqrt_prec_dq"),c("Temp","GDD_5","log_VPD","SWdown","log_Prec","sqrt_elev","Max_temp", "MI","AI_thorn","log_Prec_CV","temp_cv","log_prec_wq","sqrt_prec_dq")]
+
+colnames(corrplot_example) <- c("MAT","GDD_5","log(VPD)","SWDown","log(MAP)","sqrt(Elevation)","max(Temp)", "MI", "aridity index Thornthwaite","log_Prec_CV","temp_cv","Prec_WQ", "Prec_DQ")
+rownames(corrplot_example) <- c("MAT","GDD_5","log(VPD)","SWDown","log(MAP)","sqrt(Elevation)","max(Temp)", "MI", "aridity index Thornthwaite","log_Prec_CV","temp_cv","Prec_WQ", "Prec_DQ")
+
+corrplot::corrplot(corrplot_example, method="ellipse", type = "upper")
+
+dev.off()
+```
+
+Basic patterns with environment
+
+Supp Figure. 1
+
+```{r}
+library(lme4)
+
+fit_models <- function(...){
+  data <- tibble(...) %>%
+    unnest(data)
+  
+  fit_lm <- lm(trait_value~env_value, data)
+  
+  data$env_value2 <- data$env_value^2
+  fit_quad <- lm(trait_value ~ env_value + env_value2, data)
+  
+  return(tibble(p_lm = summary(fit_lm)$coef[2,4],
+         fit_lm = summary(fit_lm)$r.squared, 
+         fit_quad = summary(fit_quad)$r.squared))
+}
+```
+
+
+```{r}
+woody_field_traits_georef_mean_climate_wide %>%
+  unnest(growth_form_data) %>%
+  drop_na(growth_form) %>%
+  # drop_na(AI_thorn) %>%
+  dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_N, log_LMA, log_seed_mass, log_leaf_area, log_Prec, GDD_5, log_MI, log_VPD, AI_thorn,log_Prec_CV,temp_cv, log_prec_wq, sqrt_prec_dq, cell) %>%
+  pivot_longer(cols = c(log_leaf_capital_delta13C, 
+                        log_leaf_area,
+                        log_seed_mass,
+                        log_LMA,
+                        log_leaf_N,
+                        log_height),
+                        names_to = "trait_name", values_to = "trait_value") %>%
+  pivot_longer(cols = c(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI), names_to = "env_name", values_to = "env_value") %>% 
+  group_by(trait_name, env_name) %>%
+  nest() %>%
+  ungroup %>%
+  mutate(r2 = pmap(., fit_models)) %>%
+  unnest(r2) -> overall_relationships
+
+overall_relationships %>%
+  dplyr::select(fit_lm, trait_name, env_name) %>%
+  pivot_wider(names_from = "env_name", values_from ="fit_lm") -> fit_lm_overall
+
+print(xtable(fit_lm_overall %>%
+  dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, trait_name) %>% 
+  rename("log(MAP)" = "log_Prec",
+         "log(VPD)" = "log_VPD",
+         "log(Precipitation seasonality)" = "log_Prec_CV",
+         "log(Wettest quarter precipitation)" = "log_prec_wq",
+         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
+         "log(Moisture index)" = "log_MI") %>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_lm_overall_prec.tex")
+
+overall_relationships %>%
+  dplyr::select(fit_quad, trait_name, env_name) %>%
+  pivot_wider(names_from = "env_name", values_from ="fit_quad") -> fit_quad_overall
+
+print(xtable(fit_quad_overall %>%
+   dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, trait_name) %>% 
+  rename("log(MAP)" = "log_Prec",
+         "log(VPD)" = "log_VPD",
+         "log(Precipitation seasonality)" = "log_Prec_CV",
+         "log(Wettest quarter precipitation)" = "log_prec_wq",
+         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
+         "log(Moisture index)" = "log_MI") %>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_quad_overall_prec.tex")
+
+ 
+woody_field_traits_georef_mean_climate_wide %>%
+  unnest(growth_form_data) %>%
+  drop_na(growth_form) %>% 
+  filter(growth_form == "Woody") %>%
+  # drop_na(AI_thorn) %>%
+  dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_N, log_LMA, log_seed_mass, log_leaf_area,
+                        log_huber,
+                        log_wood_dens, log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, cell) %>%
+  pivot_longer(cols = c(log_leaf_capital_delta13C, 
+                        log_leaf_area,
+                        log_seed_mass,
+                        log_LMA,
+                        log_leaf_N,
+                        log_height,
+                        log_huber,
+                        log_wood_dens),
+                        names_to = "trait_name", values_to = "trait_value") %>%
+  pivot_longer(cols = c(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI), names_to = "env_name", values_to = "env_value") %>% 
+  group_by(trait_name, env_name) %>%
+  nest() %>%
+  ungroup %>%
+  mutate(r2 = pmap(., fit_models)) %>%
+  unnest(r2)-> woody_relationships
+
+woody_relationships %>%
+  dplyr::select(fit_lm, trait_name, env_name) %>%
+  pivot_wider(names_from = "env_name", values_from ="fit_lm") -> fit_lm_woody
+
+
+print(xtable(fit_lm_woody %>%
+  dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, trait_name) %>% 
+  rename("log(MAP)" = "log_Prec",
+         "log(VPD)" = "log_VPD",
+         "log(Precipitation seasonality)" = "log_Prec_CV",
+         "log(Wettest quarter precipitation)" = "log_prec_wq",
+         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
+         "log(Moisture index)" = "log_MI") %>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_lm_woody_prec.tex")
+
+woody_relationships %>%
+  dplyr::select(fit_quad, trait_name, env_name) %>%
+  pivot_wider(names_from = "env_name", values_from ="fit_quad") -> fit_quad_woody
+
+print(xtable(fit_quad_woody %>%
+  dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, trait_name) %>% 
+  rename("log(MAP)" = "log_Prec",
+         "log(VPD)" = "log_VPD",
+         "log(Precipitation seasonality)" = "log_Prec_CV",
+         "log(Wettest quarter precipitation)" = "log_prec_wq",
+         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
+         "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_quad_woody_prec.tex")
+
+
+woody_field_traits_georef_mean_climate_wide %>% 
+  unnest(growth_form_data) %>%
+  drop_na(growth_form) %>% 
+  filter(growth_form == "Woody" | woody_like_taxa == "Woody") %>%
+  dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_N, log_LMA, log_seed_mass, log_leaf_area,
+                        log_huber,
+                        log_wood_dens, log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, cell) %>%
+  pivot_longer(cols = c(log_leaf_capital_delta13C, 
+                        log_leaf_area,
+                        log_seed_mass,
+                        log_LMA,
+                        log_leaf_N,
+                        log_height,
+                        log_huber,
+                        log_wood_dens),
+                        names_to = "trait_name", values_to = "trait_value") %>%
+  pivot_longer(cols = c(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI), names_to = "env_name", values_to = "env_value") %>% 
+  group_by(trait_name, env_name) %>%
+  nest() %>%
+  ungroup %>%
+  mutate(r2 = pmap(., fit_models)) %>%
+  unnest(r2)-> woody_relationships
+
+woody_relationships %>%
+  dplyr::select(fit_lm, trait_name, env_name) %>%
+  pivot_wider(names_from = "env_name", values_from ="fit_lm") -> fit_lm_woody
+
+
+print(xtable(fit_lm_woody %>%
+  dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, trait_name) %>% 
+  rename("log(MAP)" = "log_Prec",
+         "log(VPD)" = "log_VPD",
+         "log(Precipitation seasonality)" = "log_Prec_CV",
+         "log(Wettest quarter precipitation)" = "log_prec_wq",
+         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
+         "log(Moisture index)" = "log_MI") %>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_lm_woody_prec_woody_like.tex")
+
+woody_relationships %>%
+  dplyr::select(fit_quad, trait_name, env_name) %>%
+  pivot_wider(names_from = "env_name", values_from ="fit_quad") -> fit_quad_woody
+
+print(xtable(fit_quad_woody %>%
+  dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, trait_name) %>% 
+  rename("log(MAP)" = "log_Prec",
+         "log(VPD)" = "log_VPD",
+         "log(Precipitation seasonality)" = "log_Prec_CV",
+         "log(Wettest quarter precipitation)" = "log_prec_wq",
+         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
+         "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_quad_woody_prec_woody_like.tex")
+
+woody_field_traits_georef_mean_climate_wide %>%
+  unnest(growth_form_data) %>%
+  drop_na(growth_form) %>% 
+  filter(growth_form != "Woody") %>%
+  # drop_na(AI_thorn) %>%
+  dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_N, log_LMA, log_seed_mass, log_leaf_area,
+                        log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, cell) %>%
+  pivot_longer(cols = c(log_leaf_capital_delta13C, 
+                        log_leaf_area,
+                        log_seed_mass,
+                        log_LMA,
+                        log_leaf_N,
+                        log_height),
+                        names_to = "trait_name", values_to = "trait_value") %>%
+  pivot_longer(cols = c(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI), names_to = "env_name", values_to = "env_value") %>% 
+  group_by(trait_name, env_name) %>%
+  nest() %>%
+  ungroup %>%
+  mutate(r2 = pmap(., fit_models)) %>%
+  unnest(r2)-> non_woody_relationships
+
+non_woody_relationships %>%
+  dplyr::select(fit_lm, trait_name, env_name) %>%
+  pivot_wider(names_from = "env_name", values_from ="fit_lm") -> fit_lm_non_woody
+
+
+print(xtable(fit_lm_non_woody %>%
+  dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, trait_name) %>% 
+  rename("log(MAP)" = "log_Prec",
+         "log(VPD)" = "log_VPD",
+         "log(Precipitation seasonality)" = "log_Prec_CV",
+         "log(Wettest quarter precipitation)" = "log_prec_wq",
+         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
+         "log(Moisture index)" = "log_MI") %>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_lm_non_woody_prec.tex")
+
+non_woody_relationships %>%
+  dplyr::select(fit_quad, trait_name, env_name) %>%
+  pivot_wider(names_from = "env_name", values_from ="fit_quad") -> fit_quad_non_woody
+
+print(xtable(fit_quad_non_woody %>%
+  dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, trait_name) %>% 
+  rename("log(MAP)" = "log_Prec",
+         "log(VPD)" = "log_VPD",
+         "log(Precipitation seasonality)" = "log_Prec_CV",
+         "log(Wettest quarter precipitation)" = "log_prec_wq",
+         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
+         "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_quad_non_woody_prec.tex")
+
+
+woody_field_traits_georef_mean_climate_wide %>%
+  unnest(growth_form_data) %>%
+  drop_na(growth_form) %>% 
+  filter(growth_form != "Woody" & woody_like_taxa != "Woody") %>% 
+  dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_N, log_LMA, log_seed_mass, log_leaf_area, log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, cell) %>%
+  pivot_longer(cols = c(log_leaf_capital_delta13C, 
+                        log_leaf_area,
+                        log_seed_mass,
+                        log_LMA,
+                        log_leaf_N,
+                        log_height),
+                        names_to = "trait_name", values_to = "trait_value") %>%
+  pivot_longer(cols = c(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI), names_to = "env_name", values_to = "env_value") %>% 
+  group_by(trait_name, env_name) %>%
+  nest() %>%
+  ungroup %>%
+  mutate(r2 = pmap(., fit_models)) %>%
+  unnest(r2)-> non_woody_relationships
+
+non_woody_relationships %>%
+  dplyr::select(fit_lm, trait_name, env_name) %>%
+  pivot_wider(names_from = "env_name", values_from ="fit_lm") -> fit_lm_non_woody
+
+
+print(xtable(fit_lm_non_woody %>%
+  dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, trait_name) %>% 
+  rename("log(MAP)" = "log_Prec",
+         "log(VPD)" = "log_VPD",
+         "log(Precipitation seasonality)" = "log_Prec_CV",
+         "log(Wettest quarter precipitation)" = "log_prec_wq",
+         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
+         "log(Moisture index)" = "log_MI") %>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_lm_non_woody_prec_woody_like.tex")
+
+non_woody_relationships %>%
+  dplyr::select(fit_quad, trait_name, env_name) %>%
+  pivot_wider(names_from = "env_name", values_from ="fit_quad") -> fit_quad_non_woody
+
+print(xtable(fit_quad_non_woody %>%
+  dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI, trait_name) %>% 
+  rename("log(MAP)" = "log_Prec",
+         "log(VPD)" = "log_VPD",
+         "log(Precipitation seasonality)" = "log_Prec_CV",
+         "log(Wettest quarter precipitation)" = "log_prec_wq",
+         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
+         "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/fit_quad_non_woody_prec_woody_like.tex")
+```
+
+
+```{r}
+woody_field_traits_georef_mean_climate %>%
+  unnest(growth_form_data, climate_data) %>% 
+  drop_na(growth_form) %>%
+  filter(trait_name %in% c("wood_density")) %>%
+    ungroup() -> data_for_plot
+
+data_for_plot %>%
+  filter(growth_form == "Woody") %>%
+  ggplot(aes(x = prec, y = value*1000)) +
+  geom_point(aes(colour = growth_form)) + 
+  scale_y_log10(expand = expansion(mult = 0.1)) +
+  theme_classic() +
+     theme(strip.background = element_blank(),
+           strip.placement = "outside") +
+  xlab("MAP (mm)") +
+  ylab(expression(paste(Wood~density))) +
+  theme(text=element_text(size=20), legend.position = "none") +
+    # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
+    #         hjust = "inward", vjust = "inward",
+    #         inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
+  scale_color_manual(values = c("#009292", "#db6d00")) +
+  geom_smooth(method = "lm", aes(group = growth_form, colour = growth_form)) +
+  scale_x_continuous(trans = c("reverse"))-> a
+
+pdf("~/Documents/GitHub/individual_height_growth_rate/output/manuscript/environmental_effects/WD_MAP.pdf", height = 7, width = 8)
+a
+dev.off()
+data_for_plot %>%
+  ggplot(aes(x = vpd/1e3, y = value)) +
+  geom_point(alpha = 0.5, aes(colour = growth_form)) + 
+  scale_y_log10(expand = expansion(mult = 0.1)) +
+  theme_classic() +
+     theme(strip.background = element_blank(),
+           strip.placement = "outside") +
+  xlab("D (kPa)") +
+  ylab("") +
+  theme(text=element_text(size=20), legend.position = "none") +
+    # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
+    #         hjust = "inward", vjust = "inward",
+    #         inherit.aes = FALSE, check_overlap = TRUE, size = 6) +
+  scale_color_manual(values = c("#009292","#db6d00")) +
+  geom_smooth(method = "lm", aes(group = growth_form, colour = growth_form)) -> b
+
+
+pdf("~/Documents/GitHub/individual_height_growth_rate/output/manuscript/environmental_effects/K_s_empirical.pdf", height = 6, width = 12)
+cowplot::plot_grid(plotlist = list(a,b), nrow = 1)
+dev.off()
+```
+
+
+```{r}
+bioclim <- terra::rast(list.files("data/climate_data/wc2.1_30s_bio", full.names = T)[c(1,2)])
+
+australia <- terra::rast("data/australia.tif")
+
+bioclim %>%
+  terra::project(australia, mask = TRUE) -> bioclim_au
+
+global_values_prec <- tibble(prec = terra::values(bioclim[[2]]))
+au_values_prec <- tibble(prec = terra::values(bioclim_au[[2]]))
+
+au_values_prec %>%
+  summarise(min_prec = min(prec, na.rm = T),
+            max_prec = max(prec, na.rm = T)) -> au_values_prec_summarised
+
+global_values_prec %>% drop_na() %>%
+  pull(prec) %>% ecdf() -> global_values_prec_ecdf
+
+global_values_prec_ecdf(au_values_prec_summarised$min_prec)
+global_values_prec_ecdf(au_values_prec_summarised$max_prec)
+
+
+global_values_prec %>%
+  drop_na() %>%
+  sample_n(100000000) %>%
+  ggplot() +
+  ylab("Quantile") +
+  xlab("Mean annual precipitation (mm/yr)") +
+  theme_classic() +
+  geom_polygon(data = tibble(y = c(0,1,1,0),
+                             x = c(au_values_prec_summarised$min_prec,
+                                         au_values_prec_summarised$min_prec,
+                                         au_values_prec_summarised$max_prec,
+                                         au_values_prec_summarised$max_prec)),
+                             aes(x = x, y = y), alpha = 0.3, fill = "red") +
+  stat_ecdf(aes(prec), linewidth = 2) + 
+  theme(text=element_text(size=12)) +
+  xlim(c(0, 5000))-> ecdf_prec
+
+
+global_values_temp <- tibble(temp = terra::values(bioclim[[1]]))
+au_values_temp <- tibble(temp = terra::values(bioclim_au[[1]]))
+
+source("R/plotting_functions/plot_whittaker_biomes.R")
+
+austraits_climate_space(core_traits) -> whittaker_plot
+
+
+png("output/manuscript/ecdf_whittaker.png", height = 1200, width = 2800, res = 200)
+
+cowplot::plot_grid(whittaker_plot, ecdf_prec, labels = "auto")
+
+dev.off()
+
+
+cor(au_values_prec, au_values_temp, use = "pairwise.complete.obs")
+
+
+
+```
+
+
+Whittaker distribution of each trait
+
+```{r}
+
+austraits_climate_space_trait_specific <- function(core_trait){
+  
+  aus_data = bind_cols(au_values_prec, au_values_temp)
+  if(length(core_trait) == 1){
+  if(core_trait == "legend"){
+    
+    ggplot() +
+      geom_polygon(
+        data = Whittaker_biomes,
+        aes(x    = temp_c,
+            y    = precp_cm,
+            fill = biome),
+        colour = "gray98",
+        # colour of polygon border
+        size   = 0.1
+      ) +
+      
+      # set color for  the temperature - precipitation data points and the the AusTraits Sites
+      scale_colour_manual(name = "Australian climate space", values = c("#FF7F50", "#233D4D")) +
+      scale_fill_manual(
+        name   = "Whittaker biomes",
+        breaks = names(Ricklefs_colors),
+        labels = names(Ricklefs_colors),
+        values =  alpha(Ricklefs_colors, 0.5)
+        
+      ) +
+      theme_classic() +
+      guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2))) +
+      xlab(expression(Temperature (degree * C))) +
+      ylab(" Precipitation (cm/yr)") +
+      theme(text = element_text(size = 12))  +
+      theme(
+        legend.justification = c(-0.1, 0),
+        legend.position = c(0.005, 0.25),
+        legend.text = element_text(size = 8),
+        legend.title = element_text(size = 10),
+        legend.background = element_rect(fill=NA)
+      ) -> p
+    p <- cowplot::get_legend(p)
+  } else{
+  
+   woody_field_traits_georef_mean_climate_wide %>%
+    drop_na(core_trait) %>%
+      group_by(cell) %>%
+      nest() %>%
+      mutate(Temp = map_dbl(data, ~unique(.x$Temp)),
+             Prec = map_dbl(data, ~unique(.x$Prec)))-> site_data
+
+    
+  ggplot() +
+  geom_polygon(
+    data = Whittaker_biomes,
+    aes(x    = temp_c,
+        y    = precp_cm,
+        fill = biome),
+    colour = "gray98",
+    # colour of polygon border
+    size   = 0.1
+  ) +
+  
+  # set color for  the temperature - precipitation data points and the the AusTraits Sites
+  scale_colour_manual(name = "Australian climate space", values = c("#FF7F50", "#233D4D")) +
+  scale_fill_manual(
+    name   = "Whittaker biomes",
+    breaks = names(Ricklefs_colors),
+    labels = names(Ricklefs_colors),
+    values =  alpha(Ricklefs_colors, 0.5)
+    
+  ) +
+  theme_classic() +
+  guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2))) +
+  xlab(expression(Temperature (degree * C))) +
+  ylab(" Precipitation (cm/yr)") +
+  theme(text = element_text(size = 12))  +
+  theme(
+    legend.justification = c(-0.1, 0),
+    legend.position = "none",
+    legend.text = element_text(size = 8),
+    legend.title = element_text(size = 10)
+  ) +
+  geom_point(
+    data = aus_data,
+    aes(x = temp,
+        y = prec/10),
+    col = "orange", alpha = 0.1
+  ) +
+  geom_point(
+    data = site_data,
+    aes(x = Temp,
+        y = Prec/10)
+    )+
+    ggtitle(core_trait) ->p
+  }
+}
+  }
+
+```
+
+
+
+```{r}
+png("output/manuscript/whittaker_plot.png", height=4000, width=4000, res=300)
+purrr::map(c(core_traits, "legend"), austraits_climate_space_trait_specific) -> whittaker_plots
+cowplot::plot_grid(plotlist = whittaker_plots)
+
+dev.off()
+```
+
+

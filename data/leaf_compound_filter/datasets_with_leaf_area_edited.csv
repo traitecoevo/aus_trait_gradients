@@ -7,13 +7,13 @@ Buckton_2019,compound_present,leaf,Methods_Austraits,palms_were_leaflets
 Burrows_2001,compound_present,leaflet,Zieria cytisoides,NA
 Caldwell_2016,compound_present,leaf,Methods_Austraits,compound_were_leaves_except_Argyrodendron trifoliolatum
 Catford_2014,compound_present,leaf,Acaena x anserovina,NA
-Cernusak_2011,no_compound,NA,NA,NA
+Cernusak_2011,no_compound,NA,originally compound_present due to NA for a few species but confirmed to be all simple,NA
 Cheesman_2020,compound_present,leaflet,Pers_Comms,NA
 Curran_2009,no_compound,NA,NA,NA
 Curtis_2012,compound_present,leaf,Cullen_australasicum,NA
 Duncan_1998,compound_present,leaf,Grevillea anethifolia,NA
 Edwards_2000,compound_present,leaf,zieria_arborescens,NA
-EsperonRodriguez_2020,no_compound,NA,NA,NA
+EsperonRodriguez_2020,no_compound,NA,originally compound_present due to NA for a few species but confirmed to be all simple,NA
 Falster_2003,compound_present,leaf,Pers_Comms,NA
 Falster_2005_1,compound_present,leaf,Pers_Comms,NA
 Falster_2005_2,compound_present,leaf,Pers_Comms,NA
@@ -24,6 +24,7 @@ Grootemaat_2015,compound_present,leaf,Pers_Comms,NA
 Grootemaat_2017_1,no_compound,NA,NA,NA
 Jin_2019,no_compound,NA,NA,NA
 Jordan_2007,compound_present,leaflet,zieria_arborescens,NA
+Jordan_2020,compound_present,leaf,Carnarvonia araliifolia,NA
 Jurado_1991,compound_present,leaflet,Vachellia farnesiana,NA
 Kanowski_2000,compound_present,leaflet,Vitex_queenslandica; Toona_ciliata; Cissus_hypoglauca,NA
 Laliberte_2012,compound_present,leaf,Acacia pulchella,NA
@@ -31,7 +32,8 @@ Lamont_2002,compound_present,NA,Unclear,NA
 Laxton_2005,compound_present,leaflet,"Cissus hypoglauca, Synoum glandulosum",NA
 Leigh_2006,no_compound,NA,NA,NA
 Leishman_1992,compound_present,leaflet,Swainsona,NA
-Lim_2017,no_compound,NA,NA,NA
+Leishman_1995,compound_present,leaflet,Acacia irrorata,NA
+Lim_2017,no_compound,NA,originally compound_present due to NA for Olearia phlogopappa subsp. flavescens but confirmed to be all simple,NA
 McCarthy_2017,compound_present,leaf,Methods_Austraits,NA
 Meers_2007,compound_present,leaf,Acacia_dealbata,NA
 Metcalfe_2009,compound_present,leaflet,Methods_Austraits,NA
@@ -39,25 +41,27 @@ Mokany_2008,compound_present,leaf,Acacia decurrens,NA
 Moles_2000,compound_present,leaf,Methods_paper,NA
 Moles_2011,compound_present,leaflet,Cupaniopsis anacardioides,NA
 Moore_2019,no_compound,NA,NA,NA
+Morgan_2005,compound_present,leaf,Acacia irrorata,NA
 Morgan_2014,compound_present,leaf,Aciphylla glacialis,NA
 Niinemets_2009,compound_present,NA,Unclear,NA
 Nolan_2022,no_compound,NA,NA,NA
 Ooi_2018,compound_present,leaf,Based on similarity with Moles 2000 and difference to Leishman 1995,NA
-Peeters_2002,compound_present,leaf,Boronia_muelleri,
-Pickering_2014,compound_present,leaf,Aciphylla glacialis,
+Peeters_2002,compound_present,leaf,Boronia_muelleri,NA
+Pickering_2014,compound_present,leaf,Aciphylla glacialis,NA
 Pickup_2002,no_compound,NA,NA,NA
 Pickup_2005,compound_present,leaf,Alectryon_subcinereus,NA
-Pollock_2012,no_compound,NA,NA,NA
-Pollock_2018,no_compound,NA,NA,NA
+Pollock_2012,no_compound,NA,originally compound_present due to NA for a few species but confirmed to be all simple (all Eucs),NA
+Pollock_2018,no_compound,NA,originally compound_present due to NA for a few species but confirmed to be all simple (all Eucs),NA
 Prior_2003,compound_present,leaflet,Erythrophleum chlorostachys,NA
 Read_2005,compound_present,NA,Unclear,NA
-Schulze_2006_2,no_compound,NA,NA,NA
+Schulze_2006_2,no_compound,NA,originally compound_present due to NA for a few species but confirmed to be all simple (all Eucs),NA
 Schulze_2014,compound_present,leaflet,Methods_Austraits,NA
 Smith_1996,compound_present,leaflet,Pandorea pandorana,NA
-Taseski_2017,no_compound,NA,NA,NA
+Staples_2019,compound_present,leaf,Acacia leucoclada,NA
+Taseski_2017,no_compound,NA,originally compound_present due to NA for a few species but confirmed to be all simple (all sedges),NA
 Tng_2013,compound_present,leaflet,Methods_Austraits,NA
 Venn_2011,compound_present,leaf,based on similarity of lamina area for compound taxa to morgan_2014 and pickering_2014,NA
-Vesk_2004,no_compound,NA,NA,NA
+Vesk_2004,no_compound,NA,originally compound_present due to NA for a few species but confirmed to be all simple,NA
 Wells_2012,compound_present,leaflet,Methods_Austraits,NA
 Westoby_2003,compound_present,leaf,Boronia pinnata,NA
 Westoby_2004,compound_present,leaf,Synoum_glandulosum,NA
@@ -66,11 +70,3 @@ Wright_2002,compound_present,leaf,Gompholobium latifolium,NA
 Wright_2006,compound_present,leaf,Acacia_dealbata,NA
 Wright_2008,compound_present,NA,Unclear,NA
 Wright_2019,compound_present,leaf,Erythrophleum chlorostachys,NA
-Bradshaw_2022,no_compound,NA,NA,NA
-Jordan_2020,compound_present,leaf,Carnarvonia araliifolia,NA
-Morgan_2005,compound_present,leaf,Acacia irrorata,
-Vesk_2023,no_compound,NA,NA,NA
-Staples_2019,compound_present,leaf,Acacia leucoclada,NA
-Leishman_1995,compound_present,leaflet,Acacia irrorata,NA
-Morgan_2021,no_compound,NA,NA,NA
-Richards_2021,no_compound,NA,NA,NA

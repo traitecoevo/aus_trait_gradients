@@ -84,21 +84,14 @@ plot_climate_space <- function(traits_sites, au_bioclim) {
 
 plot_site_map_by_trait <- function(trait_df) {
   df <-
-    trait_df %>%
-    dplyr::select(location_name, latitude, longitude, trait_name, taxon_name) %>%
-    filter(
-      latitude > (-45), latitude < (-9.5), longitude < (153), longitude > (110)
-    ) %>%
-    filter(
-      !location_name %in% c(
-        "site_at_-17.4167_degS_and_151.8833_degE",
-        "site_at_-16.5833_degS_and_150.3167_degE",
-        "site_at_-16.9333_degS_and_149.1833_degE",
-        "site_at_-16.9833_degS_and_149.8833_degE"
-      )
-    ) %>%
+    trait_df %>% 
+    dplyr::select(location_name, latitude, longitude, trait_name, taxon_name) %>% 
     drop_na()
 
+  
+  df$trait_name <- factor(df$trait_name, 
+                                     levels  = c("leaf_capital_delta13C","plant_height","huber_value","leaf_area","leaf_mass_per_area","leaf_N_per_area","leaf_N_per_area_calc","seed_dry_mass","wood_density"),
+                                     labels = c("Delta^13~C", "MH", "SA:LA","LA", "LMA","N[area]", "N[area]~(calculated)", "SM", "WD"))
 
     au_basemap() +
     geom_pointdensity(
@@ -122,7 +115,44 @@ plot_site_map_by_trait <- function(trait_df) {
       guide = "none",
       na.value = "white"
     ) + xlab("") + ylab("") +
-    facet_wrap(~trait_name)
+    facet_wrap(~trait_name,
+               labeller = label_parsed)
+    
+    
+    
+}
+
+plot_site_map_by_trait_dataset <- function(trait_df) {
+  df <-
+    trait_df %>% 
+    dplyr::select(location_name, latitude, longitude, trait_name, taxon_name, dataset_id) %>% 
+    drop_na() 
+  
+  
+  df$trait_name <- factor(df$trait_name, 
+                          levels  = c("leaf_capital_delta13C","plant_height","huber_value","leaf_area","leaf_mass_per_area","leaf_N_per_area","leaf_N_per_area_calc","seed_dry_mass","wood_density"),
+                          labels = c("Delta^13~C", "MH", "SA:LA","LA", "LMA","N[area]", "N[area]~(calculated)", "SM", "WD"))
+  
+  au_basemap() +
+    geom_point(data = df,
+               aes(y = latitude, x = longitude, group = dataset_id, colour = dataset_id),
+               # inherit.aes = FALSE,
+               # show.legend = FALSE,
+               size = 0.5,
+               alpha = 0.8) +
+    # scale_color_viridis_b(option = "plasma") +
+    theme(
+      legend.position = "right",
+    ) +
+    scale_fill_grey(
+      name = "",
+      start = 0.8,
+      guide = "none",
+      na.value = "white"
+    ) +
+    xlab("") + ylab("") +
+    facet_wrap(~trait_name,
+               labeller = label_parsed)
 }
 
 myTheme <-

@@ -5,7 +5,7 @@ austraits_climate_space <- function(core_trait){
   aus_data = bind_cols(au_values_prec, au_values_temp)
   if(length(core_trait) == 1){
   if(core_trait == "legend"){
-    
+    browser()
     ggplot() +
       geom_polygon(
         data = Whittaker_biomes,
@@ -123,7 +123,7 @@ austraits_climate_space <- function(core_trait){
       theme_classic() +
       guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2))) +
       xlab(expression(Mean~annual~temperature~(degree * C))) +
-      ylab("Mean annual precipitation (mm/yr)") +
+      ylab("Mean annual precipitation (mm)") +
       theme(text = element_text(size = 12))  +
       theme(
         legend.justification = c(-0.1, 0),
