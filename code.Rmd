@@ -34,6 +34,7 @@ dir.create("output/manuscript/figures", recursive = TRUE)
 dir.create("output/manuscript/supps_figures", recursive = TRUE)
 dir.create("output/manuscript/tables", recursive = TRUE)
 dir.create("output/manuscript/supps_tables", recursive = TRUE)
+dir.create("output/traits_by_dataset", recursive = TRUE)
 
 dir.create("data/climate_data/Envirem", recursive = TRUE)
 dir.create("data/climate_data/VPD_Chelsa", recursive = TRUE)
@@ -711,7 +712,7 @@ woody_field_traits_georef_mean_climate_wide %>%
   unnest(growth_form_data) %>%
   drop_na(growth_form) %>%
   # drop_na(AI_thorn) %>%
-  dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_N_calc, log_LMA, log_seed_mass, log_leaf_area, Temp,log_Prec, log_MI, log_VPD, log_Prec_CV, log_prec_wq, sqrt_prec_dq, log_prec_hq, sqrt_prec_cq, cell) %>%
+  dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_N_calc, log_LMA, log_seed_mass, log_leaf_area, Temp,log_Prec, log_MI, log_VPD, log_Prec_CV, log_prec_wq, sqrt_prec_dq, log_prec_hq, cell) %>%
   pivot_longer(cols = c(log_leaf_capital_delta13C, 
                         log_leaf_area,
                         log_seed_mass,
@@ -719,7 +720,7 @@ woody_field_traits_georef_mean_climate_wide %>%
                         log_leaf_N_calc,
                         log_height),
                         names_to = "trait_name", values_to = "trait_value") %>%
-  pivot_longer(cols = c(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI,Temp,log_prec_hq,sqrt_prec_cq), names_to = "env_name", values_to = "env_value") %>% 
+  pivot_longer(cols = c(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI,Temp,log_prec_hq), names_to = "env_name", values_to = "env_value") %>% 
   group_by(trait_name, env_name) %>%
   nest() %>%
   ungroup %>%
@@ -773,7 +774,7 @@ woody_field_traits_georef_mean_climate_wide %>%
   # drop_na(AI_thorn) %>%
   dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_N_calc, log_LMA, log_seed_mass, log_leaf_area,
                         log_huber,
-                        log_wood_dens, Temp, log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_prec_hq,log_MI,sqrt_prec_cq, cell) %>%
+                        log_wood_dens, Temp, log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_prec_hq,log_MI, cell) %>%
   pivot_longer(cols = c(log_leaf_capital_delta13C, 
                         log_leaf_area,
                         log_seed_mass,
@@ -783,7 +784,7 @@ woody_field_traits_georef_mean_climate_wide %>%
                         log_huber,
                         log_wood_dens),
                         names_to = "trait_name", values_to = "trait_value") %>%
-  pivot_longer(cols = c(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_prec_hq,log_MI,sqrt_prec_cq, Temp), names_to = "env_name", values_to = "env_value") %>% 
+  pivot_longer(cols = c(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_prec_hq,log_MI, Temp), names_to = "env_name", values_to = "env_value") %>% 
   group_by(trait_name, env_name) %>%
   nest() %>%
   ungroup %>%
