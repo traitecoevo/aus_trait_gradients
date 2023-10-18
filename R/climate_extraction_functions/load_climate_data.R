@@ -1,6 +1,6 @@
 library("tidyverse")
 
-load_climate_data <- function(trait_data, simple_only = FALSE){
+load_climate_data <- function(trait_data){
 
 #initialise switch as FALSE for whether climate_data.RDS matches trait data
 file_matches <- FALSE

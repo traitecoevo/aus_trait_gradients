@@ -68,6 +68,7 @@ Load in trait data from Austraits (using version 4.1.0 at the time of writing)
 ```{r, warning=FALSE, message=FALSE}
 austraits::get_versions()
 austraits <- austraits::load_austraits(version = "4.1.0")
+austraits <- readRDS("data/austraits/austraits-4.1.0.rds")
 ```
 
 Filter Austraits by the focal traits including some accessory traits like "leaflet_area" and "leaf_N_per_dry_mass" which will eventually become "leaf_area" and "leaf_N_per_area" at a later point and convert to numeric values (necessary because there are also character-based traits in AusTraits).
@@ -356,7 +357,7 @@ woody_field_traits %>%
   filter(!(value == 0.001 & dataset_id == "Thomas_2017" & trait_name == "plant_height")) -> woody_field_traits
 ```
 
-Convert $\delta^{13}C$ values to $\Delta^{13}C$ values.
+Convert $\delta^{13}C$ values to $\Delta^{13}C$ values (Farquhar et al. 1989).
 
 ```{r}
 woody_field_traits %>%
@@ -383,7 +384,7 @@ austraits$traits %>%
   mutate(photosynthetic_pathway = map(photosynthetic_pathway, ~unique(.x$value))) %>%
   mutate(length_pathways = map_dbl(photosynthetic_pathway, ~length(.x))) %>%
   filter(length_pathways == 1) %>%
-  unnest(photosynthetic_pathway) %>%
+  unnest(photosynthetic_pathway) %>% 
   filter(photosynthetic_pathway == "c3") %>%
   dplyr::select(-length_pathways) -> austraits_photosythnetic_pathway_C3_taxa
 ```
@@ -435,32 +436,6 @@ woody_field_traits_georef %>%
   drop_na(growth_form) %>%
   filter(trait_name %in% core_traits) %>%
     filter(!trait_name %in% c("huber_value","wood_density")) %>%
-  plot_site_map_by_trait() -> overall_distribution
-
-woody_field_traits_georef %>%
-  filter(entity_type %in% c("individual","population")) %>%
-  ungroup() %>%
-  unnest(growth_form_data) %>%
-  drop_na(growth_form) %>%
-  filter(growth_form == "Woody" | woody_like_taxa == "Woody") %>%
-  filter(trait_name %in% core_traits) %>%
-  plot_site_map_by_trait() -> woody_distribution
-
-woody_field_traits_georef %>%
-    filter(entity_type %in% c("individual","population")) %>%
-      unnest(growth_form_data) %>%
-  drop_na(growth_form) %>%
-  filter(growth_form == "Non-woody" & woody_like_taxa != "Woody") %>% 
-  filter(trait_name %in% core_traits) %>%
-  filter(!trait_name %in% c("huber_value","wood_density")) %>%
-  plot_site_map_by_trait() -> non_woody_distribution
-
-woody_field_traits_georef %>%
-  filter(entity_type %in% c("individual","population")) %>%
-  unnest(growth_form_data) %>%
-  drop_na(growth_form) %>%
-  filter(trait_name %in% core_traits) %>%
-    filter(!trait_name %in% c("huber_value","wood_density")) %>%
   plot_site_map_by_trait_dataset() -> overall_distribution_dataset
 
 woody_field_traits_georef %>%
@@ -473,52 +448,32 @@ woody_field_traits_georef %>%
   plot_site_map_by_trait_dataset() -> woody_distribution_dataset
 
 woody_field_traits_georef %>%
-    filter(entity_type %in% c("individual","population")) %>%
-
-      unnest(growth_form_data) %>%
+  filter(entity_type %in% c("individual","population")) %>%
+  unnest(growth_form_data) %>%
   drop_na(growth_form) %>%
   filter(growth_form == "Non-woody" & woody_like_taxa != "Woody") %>% 
   filter(trait_name %in% core_traits) %>%
   filter(!trait_name %in% c("huber_value","wood_density")) %>%
   plot_site_map_by_trait_dataset() -> non_woody_distribution_datatset
 
-
-png("output/manuscript/supps_figures/overall_distribution.png", height = 2000, width = 2000, res = 300)
-overall_distribution +
-  labs(title = "All trait data")
-dev.off()
-
-png("output/manuscript/supps_figures/woody_distribution.png", height = 2000, width = 2000, res = 300)
-woody_distribution +
-  labs(title = "Woody trait data")
-dev.off()
-
-png("output/manuscript/supps_figures/non_woody_distribution.png", height = 2000, width = 2000, res = 300)
-non_woody_distribution +
-  labs(title = "Non-woody trait data")
-dev.off()
-
-png("output/manuscript/supps_figures/overall_distribution_dataset.png", height = 2000, width = 4000, res = 200)
 overall_distribution_dataset +
-  labs(title = "All trait data")
-dev.off()
+  labs(title = "All trait data") -> a
 
-png("output/manuscript/supps_figures/woody_distribution_dataset.png", height = 2000, width = 4000, res = 200)
 woody_distribution_dataset +
-  labs(title = "Woody trait data")
-dev.off()
+  labs(title = "Woody trait data") -> b
 
-png("output/manuscript/supps_figures/non_woody_distribution_dataset.png", height = 2000, width = 3000, res = 200)
 non_woody_distribution_datatset +
-  labs(title = "Non-woody trait data")
-dev.off()
+  labs(title = "Non-woody trait data") -> c_plot
 
+png("output/manuscript/supps_figures/overall_distribution.png", height = 6000, width = 6000, res = 300)
+cowplot::plot_grid(plotlist = list(a,b,c_plot), ncol = 1, labels = c("a)","b)","c)"), align = "v")
+dev.off()
 ```
 
 Now to load the climate data. The function load_climate_data is designed to minimise load time for analysis by interpreting whether a climate.RDS is available which is appropriate for the current state of woody_field_traits_georef. The function only extracts climate data for the sites in woody_field_traits_georef, so if the identity of the sites in woody_field_traits_georef changes, then load_climate_data will need to be rerun. 
 
 ```{r}
-climate_data <- load_climate_data(woody_field_traits_georef, simple_only = FALSE)%>% 
+climate_data <- load_climate_data(woody_field_traits_georef)%>% 
   group_by(ID, cell) %>%
   nest(.key = "climate_data")
 ```
@@ -579,6 +534,29 @@ woody_field_traits_georef_climate %>%
                         map_dbl(value, ~max(.x$value)),
                         map_dbl(value, ~mean(.x$value)))) %>%
   ungroup() -> woody_field_traits_georef_mean_climate
+```
+
+Inspecting possibility of intra-specific variation analysis. Far too much data would be removed. 1324/1932 taxa would be removed for LMA
+
+```{r}
+woody_field_traits_georef_mean_climate %>% 
+  filter(trait_name == "leaf_mass_per_area") %>%
+  unnest(growth_form_data) %>% 
+  filter(growth_form == "Woody") %>%
+  group_by(taxon_name) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  filter(n < 3) %>%
+  distinct(taxon_name)
+
+woody_field_traits_georef_mean_climate %>% 
+  filter(trait_name == "leaf_mass_per_area") %>%
+  unnest(growth_form_data) %>% 
+  filter(growth_form == "Woody") %>%
+  group_by(taxon_name) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  distinct(taxon_name)
 ```
 
 Starting preparing the new species x site means for analysis. Firslty, convert to a wide format, so that we can assess which traits and environmental variables are not normally distributed.
@@ -653,8 +631,8 @@ png("output/manuscript/supps_figures/trait_correlation_woody.png", height=2000, 
 woody_field_traits_georef_mean_climate_wide %>%
   unnest(growth_form_data) %>%
   filter(growth_form == "Woody") %>%
-  dplyr::select(growth_form, log_leaf_area, log_LMA, log_huber, log_seed_mass, log_leaf_N_calc, log_leaf_capital_delta13C, log_wood_dens, log_height) -> for_corrplot
-ggpairs(for_corrplot,columns = 2:9, upper = list(continuous = wrap("cor", stars = FALSE)), columnLabels = c("LA", "LMA", "SA:LA","SM","N[area]","Delta**{13}*C","WD","MH"),
+  dplyr::select(growth_form,  log_leaf_capital_delta13C, log_height, log_leaf_area, log_LMA, log_seed_mass, log_leaf_N_calc, log_huber, log_wood_dens) -> for_corrplot
+ggpairs(for_corrplot,columns = (2:9), upper = list(continuous = wrap("cor", stars = FALSE)), columnLabels = c("Delta**{13}*C","MH","LA", "LMA","SM","N[area]", "SA:LA","WD"),
   labeller = "label_parsed",
   title = "Woody trait data") 
 dev.off()
@@ -683,8 +661,8 @@ woody_field_traits_georef_mean_climate_wide %>%
   # filter(growth_form != "Woody") %>%
   # mutate(na_col = rep(NA, 2927)) %>%
     # mutate(na_col2 = rep(NA, 2927)) %>%
-  dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_area, log_LMA, log_leaf_N_calc, log_seed_mass) -> for_corrplot
-ggpairs(for_corrplot, upper = list(continuous = wrap("cor", stars = FALSE)), columnLabels = c("Delta**{13}*C",  "MH","LA", "LMA", "N[area]", "SM"),
+  dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_area, log_LMA, log_seed_mass, log_leaf_N_calc) -> for_corrplot
+ggpairs(for_corrplot, upper = list(continuous = wrap("cor", stars = FALSE)), columnLabels = c("Delta**{13}*C",  "MH","LA", "LMA", "SM", "N[area]"),
   labeller = "label_parsed",
   title = "All trait data") -> c
 c
@@ -802,14 +780,9 @@ woody_field_traits_georef_mean_climate_wide %>%
 woody_relationships %>%
   dplyr::select(fit_lm, trait_name, env_name) %>%
   pivot_wider(names_from = "env_name", values_from ="fit_lm") -> fit_lm_woody
-
-
-woody_relationships %>%
-  dplyr::select(fit_quad, trait_name, env_name) %>%
-  pivot_wider(names_from = "env_name", values_from ="fit_quad") -> fit_quad_woody
 ```
 
-Print linear and quadratic output table in .tex format for overleaf
+Print linear output table in .tex format for overleaf
 
 ```{r}
 print(xtable(fit_lm_woody %>%
@@ -822,18 +795,6 @@ print(xtable(fit_lm_woody %>%
          "log(Warmest quarter precipitation)" = "log_prec_hq",
          "MAT" = "Temp",
          "log(Moisture index)" = "log_MI") %>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/supps_tables/fit_lm_woody_prec.tex")
-
-
-print(xtable(fit_quad_woody %>%
-  dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI,log_prec_hq,Temp, trait_name) %>% 
-  rename("log(MAP)" = "log_Prec",
-         "log(VPD)" = "log_VPD",
-         "log(Precipitation seasonality)" = "log_Prec_CV",
-         "log(Wettest quarter precipitation)" = "log_prec_wq",
-         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
-         "log(Warmest quarter precipitation)" = "log_prec_hq",
-         "MAT" = "Temp",
-         "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/supps_tables/fit_quad_woody_prec.tex")
 ```
 
 Assessing correlations for the `woody` data and woody-like taxa. 
@@ -927,12 +888,9 @@ non_woody_relationships %>%
   dplyr::select(fit_lm, trait_name, env_name) %>%
   pivot_wider(names_from = "env_name", values_from ="fit_lm") -> fit_lm_non_woody
 
-non_woody_relationships %>%
-  dplyr::select(fit_quad, trait_name, env_name) %>%
-  pivot_wider(names_from = "env_name", values_from ="fit_quad") -> fit_quad_non_woody
 ```
 
-Print linear and quadratic output table in .tex format for overleaf
+Print linear output table in .tex format for overleaf
 
 ```{r}
 print(xtable(fit_lm_non_woody %>%
@@ -945,18 +903,6 @@ print(xtable(fit_lm_non_woody %>%
          "log(Warmest quarter precipitation)" = "log_prec_hq",
          "MAT" = "Temp",
          "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/supps_tables/fit_lm_non_woody_prec.tex")
-
-
-print(xtable(fit_quad_non_woody %>%
-  dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI,log_prec_hq,Temp, trait_name) %>% 
-  rename("log(MAP)" = "log_Prec",
-         "log(VPD)" = "log_VPD",
-         "log(Precipitation seasonality)" = "log_Prec_CV",
-         "log(Wettest quarter precipitation)" = "log_prec_wq",
-         "sqrt(Driest quarter precipitation)" = "sqrt_prec_dq",
-         "log(Warmest quarter precipitation)" = "log_prec_hq",
-         "MAT" = "Temp",
-         "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/supps_tables/fit_quad_non_woody_prec.tex")
 ```
 
 Assessing correlations for the `non-woody` data and NO woody-like taxa. 
@@ -1167,19 +1113,19 @@ out_interaction_woody %>%
   mutate(r_squared = round(map_dbl(r2, ~.x[[2]]),2)) %>%
   mutate(r_squared_prec = round(map_dbl(r2, ~.x[[3]]),2)) %>%
   mutate(r_squared_main = round(map_dbl(r2, ~.x[[4]]),2)) %>%
-  mutate(direction = map_chr(r2, ~.x[[4]])) %>%
+  mutate(direction = map_chr(r2, ~.x[[5]])) %>%
   dplyr::select(trait_name,r_squared_prec_woody = r_squared_prec, r_squared_woody = r_squared, direction_woody = direction) -> interaction_woody_table
 
 out_interaction_non_woody %>%
   mutate(r_squared = round(map_dbl(r2, ~.x[[2]]),2)) %>%
   mutate(r_squared_prec = round(map_dbl(r2, ~.x[[3]]),2)) %>%
-  mutate(direction = map_chr(r2, ~.x[[4]])) %>%
+  mutate(direction = map_chr(r2, ~.x[[5]])) %>%
   dplyr::select(trait_name,r_squared_prec_non_woody = r_squared_prec, r_squared_non_woody = r_squared, direction_non_woody = direction) -> interaction_non_woody_table
 
 out_interaction_overall %>%
   mutate(r_squared = round(map_dbl(r2, ~.x[[2]]),2)) %>%
   mutate(r_squared_prec = round(map_dbl(r2, ~.x[[3]]),2)) %>%
-  mutate(direction = map_chr(r2, ~.x[[4]])) %>%
+  mutate(direction = map_chr(r2, ~.x[[5]])) %>%
   dplyr::select(trait_name,r_squared_prec_overall = r_squared_prec, r_squared_overall = r_squared, direction_overall = direction) -> interaction_overall_table
 
 left_join(interaction_woody_table, interaction_non_woody_table) %>%
@@ -1306,7 +1252,7 @@ global_values_prec %>%
 Create Figure 1a
 
 ```{r}
-#no need to include leaf area N (without claculated values)
+#no need to include leaf area N 
 austraits_climate_space(core_traits[-3]) -> whittaker_plot
 ```
 
@@ -1679,8 +1625,6 @@ ggplot() +
   theme(text = element_text(size = 12))-> b
 ```
 
-
-
 ```{r}
 png("output/manuscript/supps_figures/precipitation_comparison.png", height=2400, width=2800, res=200)
 
@@ -1692,130 +1636,3 @@ cowplot::plot_grid(plotlist = list(a1, a2), nrow = 2)
 dev.off()
 
 ```
-
-###########
-
-
-<!-- CWM plot -->
-<!-- ```{r} -->
-<!-- woody_field_traits_georef_mean_climate %>% -->
-<!--   unnest(growth_form_data, climate_data) %>% -->
-<!--   drop_na(growth_form) %>%  -->
-<!--   mutate(growth_form = if_else(woody_like_taxa == "Woody" | growth_form == "Woody", "Woody","Non-woody")) %>% -->
-<!--   filter(!(trait_name %in% c("huber_value","wood_density") & growth_form == "Non-woody" )) %>%  -->
-<!--     dplyr::select(cell, trait_name, value, prec, growth_form)%>% -->
-<!--   group_by(cell, trait_name, growth_form, prec) %>% -->
-<!--   filter(trait_name == "leaf_mass_per_area") %>% -->
-<!--   mutate(value = log(value)) %>% -->
-<!--   mutate(prec = log(prec)) %>% -->
-<!--   filter(growth_form == "Woody") %>% -->
-<!--   summarise(value = mean(value, na.rm = T)) %>% -->
-<!--   ungroup() %>% -->
-<!--   mutate(cor = cor(value, prec, use = "pairwise.complete.obs")) -->
-
-<!--   ungroup() %>% -->
-<!--   dplyr::select(-cell) %>% -->
-<!--     pivot_longer(-c("trait_name", "value","growth_form"), names_to = "env", values_to = "env_value")%>% -->
-<!--     # left_join(sub_labels) %>% -->
-<!--     filter(trait_name %in% c("leaf_area","seed_dry_mass","leaf_capital_delta13C","leaf_mass_per_area","leaf_N_per_area_calc","wood_density","plant_height","huber_value")) %>% -->
-<!--     drop_na(value, env_value) %>% -->
-<!--   group_by(trait_name, growth_form, env) %>% -->
-<!--   mutate(n = length(value)) %>% -->
-<!--     ungroup() -> data_for_plot -->
-
-<!--   data_for_plot$trait_name <- factor(data_for_plot$trait_name,  -->
-<!--                                      levels  = c("leaf_capital_delta13C","plant_height","huber_value","leaf_area","leaf_mass_per_area","leaf_N_per_area_calc","seed_dry_mass","wood_density"), -->
-<!--                                      labels = c("Delta^13~C~(`\u2030`)", "H~(m)", "SA:LA","LA~(mm^2)", "LMA~(g~m^{-2})", "N[area]~(g~m^{-2})", "SM~(mg)", "Wood~density~(mg~mm^{-3})")) -->
-
-<!-- data_for_plot %>% -->
-<!--   ggplot(aes(env_value, value,group = trait_name)) + -->
-<!--   geom_point(alpha = 0.5, aes(colour = growth_form)) +  -->
-<!--   scale_y_log10(expand = expansion(mult = 0.1)) + -->
-<!--   scale_x_log10(limits = c(min(data_for_plot$env_value, na.rm = T), max(data_for_plot$env_value, na.rm = T))) + -->
-<!--   theme_classic() + -->
-<!--   facet_wrap(~trait_name, scales = "free_y",  -->
-<!--                 strip.position = "left", -->
-<!--                labeller = label_parsed) + -->
-<!--      theme(strip.background = element_blank(), -->
-<!--            strip.placement = "outside") + -->
-<!--   xlab("MAP (mm)") + -->
-<!--   ylab("") + -->
-<!--   theme(text=element_text(size=20), legend.position = "none") + -->
-<!--     # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env), -->
-<!--     #         hjust = "inward", vjust = "inward", -->
-<!--     #         inherit.aes = FALSE, check_overlap = TRUE, size = 6) + -->
-<!--   scale_color_manual(values = c("#009292","#db6d00")) + -->
-<!--   geom_smooth(method = "lm", aes(group = growth_form, colour = growth_form)) + -->
-<!--   tag_facets() + -->
-<!--   geom_text_repel(data = data_for_plot %>% -->
-<!--                      mutate(x= ifelse(growth_form == "Woody", 0, Inf)) %>% -->
-<!--                      group_by(growth_form) %>% -->
-<!--                distinct(trait_name, .keep_all = T) %>% -->
-<!--                  mutate(n = paste("n = ",n)), aes(x = x, y = 0, label = n, colour = growth_form), segment.color = "transparent", size = 5) -> p -->
-
-
-<!-- png("output/manuscript/figures/gridded_relationships_prec_overall.png", height = 1500, width = 2666, res = 180) -->
-<!-- p  -->
-<!-- dev.off() -->
-<!-- ``` -->
-
-<!-- CWM plot -->
-<!-- ```{r} -->
-<!-- woody_field_traits_georef_mean_climate %>% -->
-<!--   unnest(growth_form_data, climate_data) %>% -->
-<!--   drop_na(growth_form) %>%  -->
-<!--   mutate(growth_form = if_else(woody_like_taxa == "Woody" | growth_form == "Woody", "Woody","Non-woody")) %>% -->
-<!--   filter(!(trait_name %in% c("huber_value","wood_density") & growth_form == "Non-woody" )) %>%  -->
-<!--     dplyr::select(taxon_name, trait_name, value, prec, growth_form)%>% -->
-<!--   filter(trait_name == "leaf_mass_per_area") %>% -->
-<!--   filter(growth_form == "Woody") %>% -->
-<!--   group_by(taxon_name) %>% -->
-<!--   mutate(n = length(taxon_name)) %>% -->
-<!--   filter(n > 15) %>% -->
-<!--   ungroup() %>% -->
-<!--     drop_na(value, prec) %>% -->
-<!--   ggplot(aes(x = prec, y = value)) + -->
-<!--   geom_point() + -->
-<!--     geom_smooth(method = "lm", aes(group = taxon_name)) + -->
-<!--   scale_y_log10() + -->
-<!--   scale_x_log10()  -->
-
-<!--   group_by(trait_name, growth_form, env) %>% -->
-<!--   mutate(n = length(value)) %>% -->
-<!--     ungroup() -> data_for_plot -->
-
-<!--   data_for_plot$trait_name <- factor(data_for_plot$trait_name,  -->
-<!--                                      levels  = c("leaf_capital_delta13C","plant_height","huber_value","leaf_area","leaf_mass_per_area","leaf_N_per_area_calc","seed_dry_mass","wood_density"), -->
-<!--                                      labels = c("Delta^13~C~(`\u2030`)", "H~(m)", "SA:LA","LA~(mm^2)", "LMA~(g~m^{-2})", "N[area]~(g~m^{-2})", "SM~(mg)", "Wood~density~(mg~mm^{-3})")) -->
-
-<!-- data_for_plot %>% -->
-<!--   ggplot(aes(env_value, value,group = trait_name)) + -->
-<!--   geom_point(alpha = 0.5, aes(colour = growth_form)) +  -->
-<!--   scale_y_log10(expand = expansion(mult = 0.1)) + -->
-<!--   scale_x_log10(limits = c(min(data_for_plot$env_value, na.rm = T), max(data_for_plot$env_value, na.rm = T))) + -->
-<!--   theme_classic() + -->
-<!--   facet_wrap(~trait_name, scales = "free_y",  -->
-<!--                 strip.position = "left", -->
-<!--                labeller = label_parsed) + -->
-<!--      theme(strip.background = element_blank(), -->
-<!--            strip.placement = "outside") + -->
-<!--   xlab("MAP (mm)") + -->
-<!--   ylab("") + -->
-<!--   theme(text=element_text(size=20), legend.position = "none") + -->
-<!--     # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env), -->
-<!--     #         hjust = "inward", vjust = "inward", -->
-<!--     #         inherit.aes = FALSE, check_overlap = TRUE, size = 6) + -->
-<!--   scale_color_manual(values = c("#009292","#db6d00")) + -->
-<!--   geom_smooth(method = "lm", aes(group = growth_form, colour = growth_form)) + -->
-<!--   tag_facets() + -->
-<!--   geom_text_repel(data = data_for_plot %>% -->
-<!--                      mutate(x= ifelse(growth_form == "Woody", 0, Inf)) %>% -->
-<!--                      group_by(growth_form) %>% -->
-<!--                distinct(trait_name, .keep_all = T) %>% -->
-<!--                  mutate(n = paste("n = ",n)), aes(x = x, y = 0, label = n, colour = growth_form), segment.color = "transparent", size = 5) -> p -->
-
-
-<!-- png("output/manuscript/figures/gridded_relationships_prec_overall.png", height = 1500, width = 2666, res = 180) -->
-<!-- p  -->
-<!-- dev.off() -->
-<!-- ``` -->
