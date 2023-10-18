@@ -27,6 +27,19 @@ Clear the workspace
 rm(list=ls())
 ```
 
+Create output directories if necessary. If exists just ignore.
+
+```{r}
+dir.create("output/manuscript/figures", recursive = TRUE)
+dir.create("output/manuscript/supps_figures", recursive = TRUE)
+dir.create("output/manuscript/tables", recursive = TRUE)
+dir.create("output/manuscript/supps_tables", recursive = TRUE)
+
+dir.create("data/climate_data/Envirem", recursive = TRUE)
+dir.create("data/climate_data/VPD_Chelsa", recursive = TRUE)
+dir.create("data/climate_data/wc2.1_30s_bio", recursive = TRUE)
+```
+
 
 Load data and user-defined functions from files
 ```{r, warning=FALSE, message=FALSE}
