@@ -1343,7 +1343,7 @@ austraits_climate_space_trait_specific <- function(core_trait){
   geom_polygon(
     data = Whittaker_biomes,
     aes(x    = temp_c,
-        y    = precp_cm,
+        y    = precp_cm*10,
         fill = biome),
     colour = "gray98",
     # colour of polygon border
