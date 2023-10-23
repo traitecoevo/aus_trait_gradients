@@ -1,9 +1,4 @@
----
-output: html_document
-editor_options: 
-  chunk_output_type: console
----
-0---
+--
 title: Report on data in AusTraits
 output:
   html_document:
@@ -21,6 +16,7 @@ editor_options:
   chunk_output_type: console
 ---
 
+# Setup
 Clear the workspace
 
 ```{r}
@@ -59,6 +55,10 @@ source("R/plotting_functions/ggpairs_modified.R")
 Load packages
 
 ```{r, warning=FALSE, message=FALSE}
+
+#devtools::install_github("valentinitnelav/plotbiomes")
+#devtools::install_github("eliocamp/tagger")
+
 library(xtable)
 library(lubridate)
 library(R.utils)
@@ -70,18 +70,20 @@ library(relaimpo)
 library(austraits)
 library(terra)
 library(GGally)
-library("effects")
-library("mgcv")
-library("tidymv")
-library("ggnewscale")
+library(effects)
+library(mgcv)
+library(tidymv)
+library(ggnewscale)
 library(ggrepel)
 ```
+
+# Data processing 
 
 Load in trait data from Austraits (using version 4.1.0 at the time of writing)
 
 ```{r, warning=FALSE, message=FALSE}
-austraits::get_versions()
-austraits <- austraits::load_austraits(version = "4.1.0")
+#austraits::get_versions()
+#austraits <- austraits::load_austraits(version = "4.1.0")
 austraits <- readRDS("data/austraits/austraits-4.1.0.rds")
 ```
 
@@ -991,7 +993,7 @@ fit_and_plot_interaction_models <- function(..., shape = "circle"){
 
   #fit interaction model
   res <- lm(trait_value~log_Prec*Temp, data)
-  browser()
+  
   #create a in-sample dataset to predict from interaction model. Sampling across rainfall gradient for a given trait and the 33rd and 66th quantile of the temperature gradient
   newdf = expand_grid(log_Prec = seq(min(data$log_Prec, na.rm = T), max(data$log_Prec, na.rm = T), length.out = 100), Temp = c(quantile(data$Temp, 0.25, na.rm = T), quantile(data$Temp, 0.75, na.rm = T)))
   

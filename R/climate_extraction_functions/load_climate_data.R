@@ -1,10 +1,7 @@
-library("tidyverse")
-
 load_climate_data <- function(trait_data){
 
 #initialise switch as FALSE for whether climate_data.RDS matches trait data
 file_matches <- FALSE
-browser()
 
 #test whether climate_data.RDS exists and, if it does, compare against trait data to see if climate extraction needs to be rerun
 if(file.exists("data/climate_data.RDS")){
@@ -31,7 +28,7 @@ trait_data %>%
   
 #load climate datasets from three sources  
 folders <- c("wc2.1_30s_bio","envirem","VPD_Chelsa")  
-browser()
+
 #load a target raster. We do this to set the baseline CRS and resolution (all climate layers are in the same res so no up or down-scaling required)
 target_raster <- terra::rast("data/climate_data/wc2.1_30s_bio/wc2.1_30s_bio_1.tif")
 #set the target crs
@@ -123,8 +120,6 @@ map_dbl(extracted, terra::nlyr) %>%
 
 out %>%
 purrr::reduce(left_join) -> extracted
-
-browser()
 
 #find mean value of each climate layer in each cell
 extracted %>%
