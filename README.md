@@ -6,7 +6,9 @@ Running the analysis pre-packaged
 
 To run the analysis, run the file Aus_traits_gradients.Rproj. Then, open code.Rmd to view the script, run the analysis and produce figures and tibles.
 
-The script is self-contained, and will reproduce the results in the manuscript because the traits and climate data are stored as .RDS files, which are small in size and can be transferred easily. Moreover, the austraits package allows Austraits to be downloaded easily for use.
+The script is mostly self-contained, and will reproduce the results in the manuscript because the traits and climate data are stored as .RDS files, which are small in size and can be transferred easily. Moreover, the austraits package allows Austraits to be downloaded easily for use.
+
+The only thing that needs to be done manually is to include the Bioclim raster layers into the folder climate_data/wc2.1_30s_bio to ensure that Figure 1 and certain supplementary figures can run.
 
 Modifying the analysis
 
@@ -49,4 +51,52 @@ Contents:
 	
 
 The directory structure of the repository is as follows:	
-├── %├── Aus_trait_gradients.Rproj├── DESCRIPTION├── R│   ├── climate_extraction_functions│   │   └── load_climate_data.R│   ├── error_checking_functions│   │   └── error_checking_function.R│   ├── ggpairs2.R│   └── plotting_functions│       ├── plot_climate.R│       ├── plot_trait_by_dataset.R│       ├── plot_whittaker_biomes.R│       └── plotting_functions.R├── README.md├── code.Rmd├── data│   ├── AUS_2021_AUST_SHP_GDA2020│   │   ├── AUS_2021_AUST_GDA2020.dbf│   │   ├── AUS_2021_AUST_GDA2020.prj│   │   ├── AUS_2021_AUST_GDA2020.shp│   │   ├── AUS_2021_AUST_GDA2020.shx│   │   └── AUS_2021_AUST_GDA2020.xml│   ├── austraits│   │   ├── austraits-4.1.0.rds│   │   └── austraits.json│   ├── australia.tif│   ├── climate_data│   │   ├── Envirem│   │   │   ├── current_30arcsec_annualPET.tif│   │   │   ├── current_30arcsec_aridityIndexThornthwaite.tif│   │   │   ├── current_30arcsec_growingDegDays0.tif│   │   │   └── current_30arcsec_growingDegDays5.tif│   │   ├── VPD_Chelsa│   │   │   ├── "CHELSA 1981-2010 monthly VPD layers"│   │   └── wc2.1_30s_bio│   │       ├── "bioclim raster layers 30s res"│   ├── climate_data.RDS│   ├── erroneous_values│   │   └── erroneous_values.csv│   ├── leaf_compound_filter│   │   ├── datasets_with_leaf_area.csv│   │   └── datasets_with_leaf_area_edited.csv├── documents│   ├── cover_letter_New_Phyt.docx│   └── cover_letter_New_Phyt_submission.docx└── output    ├── manuscript    └── traits_by_dataset	
+├── %
+├── Aus_trait_gradients.Rproj
+├── DESCRIPTION
+├── R
+│   ├── climate_extraction_functions
+│   │   └── load_climate_data.R
+│   ├── error_checking_functions
+│   │   └── error_checking_function.R
+│   ├── ggpairs2.R
+│   └── plotting_functions
+│       ├── plot_climate.R
+│       ├── plot_trait_by_dataset.R
+│       ├── plot_whittaker_biomes.R
+│       └── plotting_functions.R
+├── README.md
+├── code.Rmd
+├── data
+│   ├── AUS_2021_AUST_SHP_GDA2020
+│   │   ├── AUS_2021_AUST_GDA2020.dbf
+│   │   ├── AUS_2021_AUST_GDA2020.prj
+│   │   ├── AUS_2021_AUST_GDA2020.shp
+│   │   ├── AUS_2021_AUST_GDA2020.shx
+│   │   └── AUS_2021_AUST_GDA2020.xml
+│   ├── austraits
+│   │   ├── austraits-4.1.0.rds
+│   │   └── austraits.json
+│   ├── australia.tif
+│   ├── climate_data
+│   │   ├── Envirem
+│   │   │   ├── current_30arcsec_annualPET.tif
+│   │   │   ├── current_30arcsec_aridityIndexThornthwaite.tif
+│   │   │   ├── current_30arcsec_growingDegDays0.tif
+│   │   │   └── current_30arcsec_growingDegDays5.tif
+│   │   ├── VPD_Chelsa
+│   │   │   ├── "CHELSA 1981-2010 monthly VPD layers"
+│   │   └── wc2.1_30s_bio
+│   │       ├── "bioclim raster layers 30s res"
+│   ├── climate_data.RDS
+│   ├── erroneous_values
+│   │   └── erroneous_values.csv
+│   ├── leaf_compound_filter
+│   │   ├── datasets_with_leaf_area.csv
+│   │   └── datasets_with_leaf_area_edited.csv
+├── documents
+│   ├── cover_letter_New_Phyt.docx
+│   └── cover_letter_New_Phyt_submission.docx
+└── output
+    ├── manuscript
+    └── traits_by_dataset	

@@ -1201,7 +1201,9 @@ p
 dev.off()
 ```
 
-Figure 1 - the comparison of climate space across the entire dataset as well as supporting analysis for climate relationships in Australia compared to globe (in Introduction as well as Figure 1). Left to the end because these are computationally very expensive.
+Figure 1 - the comparison of climate space across the entire dataset as well as supporting analysis for climate relationships in Australia compared to globe (in Introduction as well as Figure 1). Left to the end because these are computationally very expensive. 
+
+For this section, it will be necessary to add the Bioclim layers to the dataset which can be accessed from here: https://biogeo.ucdavis.edu/data/worldclim/v2.1/base/wc2.1_30s_bio.zip
 
 ```{r}
 #load in the bioclim variables, temperature and precipitation
