@@ -1373,7 +1373,7 @@ austraits_climate_space_trait_specific <- function(core_trait){
   geom_point(
     data = aus_data,
     aes(x = temp,
-        y = prec/10),
+        y = prec),
     col = "orange", alpha = 0.1
   ) +
   geom_point(
@@ -1457,7 +1457,7 @@ data_for_plot %>%
      theme(strip.background = element_blank(),
            strip.placement = "outside") +
   xlab("MAP (mm)") +
-  ylab("H (m)") +
+  ylab("MH (m)") +
   theme(text=element_text(size=20), legend.position = "none") +
     # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
     #         hjust = "inward", vjust = "inward",
@@ -1497,7 +1497,7 @@ data_for_plot %>%
      theme(strip.background = element_blank(),
            strip.placement = "outside") +
   xlab("MAP (mm)") +
-  ylab("H (m)") +
+  ylab("MH (m)") +
   theme(text=element_text(size=20), legend.position = "none") +
     # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
     #         hjust = "inward", vjust = "inward",
@@ -1547,7 +1547,7 @@ data_for_plot %>%
      theme(strip.background = element_blank(),
            strip.placement = "outside") +
   xlab("MAP (mm)") +
-  ylab("H (m)") +
+  ylab("MH (m)") +
   theme(text=element_text(size=20), legend.position = "none") +
     # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
     #         hjust = "inward", vjust = "inward",
@@ -1588,7 +1588,7 @@ data_for_plot %>%
      theme(strip.background = element_blank(),
            strip.placement = "outside") +
   xlab("Mean Prec. Warmest Quarter (mm)") +
-  ylab("H (m)") +
+  ylab("MH (m)") +
   theme(text=element_text(size=20), legend.position = "none") +
     # geom_text(mapping = aes(x = 0, y = Inf, label = label, group=env),
     #         hjust = "inward", vjust = "inward",
