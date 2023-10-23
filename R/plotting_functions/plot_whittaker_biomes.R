@@ -5,7 +5,6 @@ austraits_climate_space <- function(core_trait){
   aus_data = bind_cols(au_values_prec, au_values_temp)
   if(length(core_trait) == 1){
   if(core_trait == "legend"){
-    browser()
     ggplot() +
       geom_polygon(
         data = Whittaker_biomes,
@@ -91,8 +90,7 @@ austraits_climate_space <- function(core_trait){
 }
   else{
     
-    browser()
-    
+
     woody_field_traits_georef_mean_climate_wide %>%
       pivot_longer(cols = c(core_traits)) %>%
       drop_na(value) %>%
