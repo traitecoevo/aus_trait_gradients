@@ -18,7 +18,7 @@ However, if you do want to modify the analysis, it may be necessary to download 
 
 - Climate data must also be downloaded due the large file sizes, but cannot be downloaded via R.
 Information about where to access climate files is available in the code.Rmd but is also detailed here.
-	-The standard Bioclim variables are availalbe here: (https://biogeo.ucdavis.edu/data/worldclim/v2.1/base/wc2.1_30s_bio.zip). This link directly downloads the zip file containing all 19 variables at 30sec resolution. Unzip the downloaded folder, then drag the files into the empty folder climate_data/wc2.1_30s_bio
+	-The standard Bioclim variables are availalbe here: (https://biogeo.ucdavis.edu/data/worldclim/v2.1/base/wc2.1_30s_bio.zip). This link directly downloads the zip file containing all 19 variables at 30sec resolution. Unzip the downloaded folder, then drag the files into the empty folder data/climate_data/wc2.1_30s_bio
 	
 	-The ENVIREM variables are available here (https://deepblue.lib.umich.edu/data/concern/data_sets/gt54kn05f). Download the .zip folder titled Australia_current_30arcsec_geotiff_set1.zip then drag the following file: current_30arcsec_annualPET.tif, into the empty folder climate_data/Envirem
 	
