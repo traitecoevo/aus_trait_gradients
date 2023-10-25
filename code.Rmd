@@ -17,12 +17,6 @@ editor_options:
 ---
 
 # Setup
-Clear the workspace
-
-```{r}
-rm(list=ls())
-```
-
 Create output directories if necessary. If exists just ignore.
 
 ```{r}
