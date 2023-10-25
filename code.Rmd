@@ -645,7 +645,7 @@ woody_field_traits_georef_mean_climate_wide %>%
   unnest(growth_form_data) %>%
   filter(growth_form == "Woody") %>%
   dplyr::select(growth_form,  log_leaf_capital_delta13C, log_height, log_leaf_area, log_LMA, log_seed_mass, log_leaf_N_calc, log_huber, log_wood_dens) -> for_corrplot
-ggpairs(for_corrplot,columns = (2:9), upper = list(continuous = wrap("cor", stars = FALSE)), columnLabels = c("Delta**{13}*C","MH","LA", "LMA","SM","N[area]", "SA:LA","WD"),
+ggpairs(for_corrplot,columns = (2:9), upper = list(continuous = GGally::wrap("cor", stars = FALSE)), columnLabels = c("Delta**{13}*C","MH","LA", "LMA","SM","N[area]", "SA:LA","WD"),
   labeller = "label_parsed",
   title = "Woody trait data") 
 dev.off()
@@ -659,7 +659,7 @@ woody_field_traits_georef_mean_climate_wide %>%
   # mutate(na_col = rep(NA, 2927)) %>%
     # mutate(na_col2 = rep(NA, 2927)) %>%
   dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_area, log_LMA, log_seed_mass, log_leaf_N_calc) -> for_corrplot
-ggpairs_modified(for_corrplot, upper = list(continuous = wrap("cor", stars = FALSE))
+ggpairs_modified(for_corrplot, upper = list(continuous = GGally::wrap("cor", stars = FALSE))
 , columnLabels = c("Delta**{13}*C", "MH", "LA", "LMA", "SM", "N[area]"),
   labeller = "label_parsed",
   title = "Non-woody trait data") -> b
@@ -675,7 +675,7 @@ woody_field_traits_georef_mean_climate_wide %>%
   # mutate(na_col = rep(NA, 2927)) %>%
     # mutate(na_col2 = rep(NA, 2927)) %>%
   dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_area, log_LMA, log_seed_mass, log_leaf_N_calc) -> for_corrplot
-ggpairs(for_corrplot, upper = list(continuous = wrap("cor", stars = FALSE)), columnLabels = c("Delta**{13}*C",  "MH","LA", "LMA", "SM", "N[area]"),
+ggpairs(for_corrplot, upper = list(continuous = GGally::wrap("cor", stars = FALSE)), columnLabels = c("Delta**{13}*C",  "MH","LA", "LMA", "SM", "N[area]"),
   labeller = "label_parsed",
   title = "All trait data") -> c
 c
