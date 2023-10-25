@@ -30,8 +30,6 @@ dir.create("data/climate_data/Envirem", recursive = TRUE)
 dir.create("data/climate_data/VPD_Chelsa", recursive = TRUE)
 dir.create("data/climate_data/wc2.1_30s_bio", recursive = TRUE)
 ```
-
-
 Load data and user-defined functions from files
 ```{r, warning=FALSE, message=FALSE}
 #functions to run assessments of data entry (austraits already goes through cleaning protocols)
@@ -50,8 +48,12 @@ Load packages
 
 ```{r, warning=FALSE, message=FALSE}
 
-#devtools::install_github("valentinitnelav/plotbiomes")
-#devtools::install_github("eliocamp/tagger")
+# remotes::install_github("valentinitnelav/plotbiomes")
+library(plotbiomes)
+# remotes::install_github("eliocamp/tagger")
+library(tagger)
+# remotes::install_github("traitecoevo/austraits", dependencies = TRUE, upgrade = "ask")
+library(austraits)
 
 library(xtable)
 library(lubridate)
@@ -59,9 +61,7 @@ library(R.utils)
 library(tidyverse)
 library(corrplot)
 library(ggpointdensity)
-library(tagger)
 library(relaimpo)
-library(austraits)
 library(terra)
 library(GGally)
 library(effects)
@@ -69,6 +69,9 @@ library(mgcv)
 library(tidymv)
 library(ggnewscale)
 library(ggrepel)
+library(raster)
+library(tidyterra)
+
 ```
 
 # Data processing 
@@ -1617,8 +1620,6 @@ rain <- "data/climate_data/wc2.1_30s_bio//wc2.1_30s_bio_12.tif"
 global_rast <- terra::rast(c(rain, rain_warm))
 global_rast %>%
   terra::crop(australia, mask = T) -> aus_plots
-
-library(tidyterra)
 
 ggplot() +
   geom_spatraster(data = aus_plots[[1]], maxcell = 1e6) +
