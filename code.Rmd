@@ -30,20 +30,6 @@ dir.create("data/climate_data/Envirem", recursive = TRUE)
 dir.create("data/climate_data/VPD_Chelsa", recursive = TRUE)
 dir.create("data/climate_data/wc2.1_30s_bio", recursive = TRUE)
 ```
-Load data and user-defined functions from files
-```{r, warning=FALSE, message=FALSE}
-#functions to run assessments of data entry (austraits already goes through cleaning protocols)
-source("R/error_checking_functions/error_checking_function.R")
-#climate extraction functions
-source("R/climate_extraction_functions/load_climate_data.R")
-#plotting functions
-source("R/plotting_functions/plot_whittaker_biomes.R")
-source("R/plotting_functions/plot_climate.R")
-source("R/plotting_functions/plot_trait_by_dataset.R")
-source("R/plotting_functions/ggpairs_modified.R")
-
-```
-
 Load packages
 
 ```{r, warning=FALSE, message=FALSE}
@@ -71,6 +57,20 @@ library(ggnewscale)
 library(ggrepel)
 library(raster)
 library(tidyterra)
+
+```
+
+Load data and user-defined functions from files
+```{r, warning=FALSE, message=FALSE}
+#functions to run assessments of data entry (austraits already goes through cleaning protocols)
+source("R/error_checking_functions/error_checking_function.R")
+#climate extraction functions
+source("R/climate_extraction_functions/load_climate_data.R")
+#plotting functions
+source("R/plotting_functions/plot_whittaker_biomes.R")
+source("R/plotting_functions/plot_climate.R")
+source("R/plotting_functions/plot_trait_by_dataset.R")
+source("R/plotting_functions/ggpairs_modified.R")
 
 ```
 
