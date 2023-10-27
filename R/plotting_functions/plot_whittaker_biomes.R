@@ -1,5 +1,3 @@
-library(plotbiomes)
-
 austraits_climate_space <- function(core_trait){
   
   aus_data = bind_cols(au_values_prec, au_values_temp)

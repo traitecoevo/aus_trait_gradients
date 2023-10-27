@@ -195,8 +195,6 @@ myTheme <-
 
 plot_worldclim_climate_data <- function(variable = c("temp","prec")) {
 
-  library(raster)
-
   # Download bioclim data using library (raster)
   bioclim <- getData("worldclim", var = "bio", res = 10)
 

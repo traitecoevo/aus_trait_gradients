@@ -17,12 +17,6 @@ editor_options:
 ---
 
 # Setup
-Clear the workspace
-
-```{r}
-rm(list=ls())
-```
-
 Create output directories if necessary. If exists just ignore.
 
 ```{r}
@@ -36,7 +30,35 @@ dir.create("data/climate_data/Envirem", recursive = TRUE)
 dir.create("data/climate_data/VPD_Chelsa", recursive = TRUE)
 dir.create("data/climate_data/wc2.1_30s_bio", recursive = TRUE)
 ```
+Load packages
 
+```{r, warning=FALSE, message=FALSE}
+
+# remotes::install_github("valentinitnelav/plotbiomes")
+library(plotbiomes)
+# remotes::install_github("eliocamp/tagger")
+library(tagger)
+# remotes::install_github("traitecoevo/austraits", dependencies = TRUE, upgrade = "ask")
+library(austraits)
+
+library(xtable)
+library(lubridate)
+library(R.utils)
+library(tidyverse)
+library(corrplot)
+library(ggpointdensity)
+library(relaimpo)
+library(terra)
+library(GGally)
+library(effects)
+library(mgcv)
+library(tidymv)
+library(ggnewscale)
+library(ggrepel)
+library(raster)
+library(tidyterra)
+
+```
 
 Load data and user-defined functions from files
 ```{r, warning=FALSE, message=FALSE}
@@ -50,31 +72,6 @@ source("R/plotting_functions/plot_climate.R")
 source("R/plotting_functions/plot_trait_by_dataset.R")
 source("R/plotting_functions/ggpairs_modified.R")
 
-```
-
-Load packages
-
-```{r, warning=FALSE, message=FALSE}
-
-#devtools::install_github("valentinitnelav/plotbiomes")
-#devtools::install_github("eliocamp/tagger")
-
-library(xtable)
-library(lubridate)
-library(R.utils)
-library(tidyverse)
-library(corrplot)
-library(ggpointdensity)
-library(tagger)
-library(relaimpo)
-library(austraits)
-library(terra)
-library(GGally)
-library(effects)
-library(mgcv)
-library(tidymv)
-library(ggnewscale)
-library(ggrepel)
 ```
 
 # Data processing 
@@ -648,7 +645,7 @@ woody_field_traits_georef_mean_climate_wide %>%
   unnest(growth_form_data) %>%
   filter(growth_form == "Woody") %>%
   dplyr::select(growth_form,  log_leaf_capital_delta13C, log_height, log_leaf_area, log_LMA, log_seed_mass, log_leaf_N_calc, log_huber, log_wood_dens) -> for_corrplot
-ggpairs(for_corrplot,columns = (2:9), upper = list(continuous = wrap("cor", stars = FALSE)), columnLabels = c("Delta**{13}*C","MH","LA", "LMA","SM","N[area]", "SA:LA","WD"),
+ggpairs(for_corrplot,columns = (2:9), upper = list(continuous = GGally::wrap("cor", stars = FALSE)), columnLabels = c("Delta**{13}*C","MH","LA", "LMA","SM","N[area]", "SA:LA","WD"),
   labeller = "label_parsed",
   title = "Woody trait data") 
 dev.off()
@@ -662,7 +659,7 @@ woody_field_traits_georef_mean_climate_wide %>%
   # mutate(na_col = rep(NA, 2927)) %>%
     # mutate(na_col2 = rep(NA, 2927)) %>%
   dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_area, log_LMA, log_seed_mass, log_leaf_N_calc) -> for_corrplot
-ggpairs_modified(for_corrplot, upper = list(continuous = wrap("cor", stars = FALSE))
+ggpairs_modified(for_corrplot, upper = list(continuous = GGally::wrap("cor", stars = FALSE))
 , columnLabels = c("Delta**{13}*C", "MH", "LA", "LMA", "SM", "N[area]"),
   labeller = "label_parsed",
   title = "Non-woody trait data") -> b
@@ -678,7 +675,7 @@ woody_field_traits_georef_mean_climate_wide %>%
   # mutate(na_col = rep(NA, 2927)) %>%
     # mutate(na_col2 = rep(NA, 2927)) %>%
   dplyr::select(log_leaf_capital_delta13C, log_height, log_leaf_area, log_LMA, log_seed_mass, log_leaf_N_calc) -> for_corrplot
-ggpairs(for_corrplot, upper = list(continuous = wrap("cor", stars = FALSE)), columnLabels = c("Delta**{13}*C",  "MH","LA", "LMA", "SM", "N[area]"),
+ggpairs(for_corrplot, upper = list(continuous = GGally::wrap("cor", stars = FALSE)), columnLabels = c("Delta**{13}*C",  "MH","LA", "LMA", "SM", "N[area]"),
   labeller = "label_parsed",
   title = "All trait data") -> c
 c
@@ -1623,8 +1620,6 @@ rain <- "data/climate_data/wc2.1_30s_bio//wc2.1_30s_bio_12.tif"
 global_rast <- terra::rast(c(rain, rain_warm))
 global_rast %>%
   terra::crop(australia, mask = T) -> aus_plots
-
-library(tidyterra)
 
 ggplot() +
   geom_spatraster(data = aus_plots[[1]], maxcell = 1e6) +
