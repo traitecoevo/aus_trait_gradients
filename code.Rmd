@@ -478,7 +478,7 @@ woody_distribution_dataset +
 non_woody_distribution_datatset +
   labs(title = "Non-woody trait data") -> c_plot
 
-png("output/manuscript/supps_figures/overall_distribution.png", height = 6000, width = 6000, res = 300)
+png("output/manuscript/supps_figures/overall_distribution.png", height = 6000, width = 5500, res = 300)
 cowplot::plot_grid(plotlist = list(a,b,c_plot), ncol = 1, labels = c("a)","b)","c)"), align = "v")
 dev.off()
 ```
@@ -683,7 +683,7 @@ dev.off()
 ```
 
 
-Main analysis
+##Main analysis
 
 First, create a function to fit a linear model, and then a quadratic model, then extract the linear term coefficient and the r.squared values for the linear and quadratic model.
 
@@ -761,6 +761,7 @@ print(xtable(fit_quad_overall %>%
          "log(Warmest quarter precipitation)" = "log_prec_hq",
          "MAT" = "Temp",
          "log(Moisture index)" = "log_MI") %>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/supps_tables/fit_quad_overall_prec.tex")
+
 ```
 
 Assessing correlations for the `woody` data. This analysis therefore does NOT include non-woody woody-like taxa.
@@ -808,6 +809,7 @@ print(xtable(fit_lm_woody %>%
          "log(Warmest quarter precipitation)" = "log_prec_hq",
          "MAT" = "Temp",
          "log(Moisture index)" = "log_MI") %>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/supps_tables/fit_lm_woody_prec.tex")
+
 ```
 
 Assessing correlations for the `woody` data and woody-like taxa. 
@@ -860,7 +862,6 @@ print(xtable(fit_lm_woody %>%
          "MAT" = "Temp",
          "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/supps_tables/fit_lm_woody_prec_woody_like.tex")
 
-
 print(xtable(fit_quad_woody %>%
   dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI,log_prec_hq,Temp, trait_name) %>% 
   rename("log(MAP)" = "log_Prec",
@@ -871,6 +872,7 @@ print(xtable(fit_quad_woody %>%
          "log(Warmest quarter precipitation)" = "log_prec_hq",
          "MAT" = "Temp",
          "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/supps_tables/fit_quad_woody_prec_woody_like.tex")
+
 ```
 
 Assessing correlations for the `non-woody` data and woody-like taxa. 
@@ -916,6 +918,7 @@ print(xtable(fit_lm_non_woody %>%
          "log(Warmest quarter precipitation)" = "log_prec_hq",
          "MAT" = "Temp",
          "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/supps_tables/fit_lm_non_woody_prec.tex")
+
 ```
 
 Assessing correlations for the `non-woody` data and NO woody-like taxa. 
@@ -963,6 +966,7 @@ print(xtable(fit_lm_non_woody %>%
          "MAT" = "Temp",
          "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/supps_tables/fit_lm_non_woody_prec_woody_like.tex")
 
+
 print(xtable(fit_quad_non_woody %>%
   dplyr::select(log_Prec, log_VPD,log_Prec_CV, log_prec_wq, sqrt_prec_dq,log_MI,log_prec_hq,Temp, trait_name) %>% 
   rename("log(MAP)" = "log_Prec",
@@ -973,6 +977,7 @@ print(xtable(fit_quad_non_woody %>%
          "log(Warmest quarter precipitation)" = "log_prec_hq",
          "MAT" = "Temp",
          "log(Moisture index)" = "log_MI")%>% pivot_longer(cols = -(trait_name)) %>% pivot_wider(names_from = "trait_name", values_from = "value")), include.rownames=FALSE, file = "output/manuscript/supps_tables/fit_quad_non_woody_prec_woody_like.tex")
+
 ```
 
 Assessing potential interactions between precipitation and temperature. Looking for the plotted effects as well as the variance explained.
@@ -1195,9 +1200,7 @@ data_for_plot %>%
                  mutate(n = paste("n = ",n)), aes(x = x, y = 0, label = n, colour = growth_form), segment.color = "transparent", size = 5) -> p
 
 
-png("output/manuscript/figures/gridded_relationships_prec_overall.png", height = 1500, width = 2666, res = 180)
-p 
-dev.off()
+ggsave("output/manuscript/figures/gridded_relationships_prec_overall.png",plot = p, height = 4500, width = 7998, units = "px", dpi = 600)
 ```
 
 Figure 1 - the comparison of climate space across the entire dataset as well as supporting analysis for climate relationships in Australia compared to globe (in Introduction as well as Figure 1). Left to the end because these are computationally very expensive. 
@@ -1251,7 +1254,7 @@ global_values_prec %>%
   # sample_n(100000000) %>%
   ggplot() +
   ylab("Quantile") +
-  xlab("Mean annual precipitation (mm/yr)") +
+  xlab("Mean annual precipitation (mm)") +
   theme_classic() +
   geom_polygon(data = tibble(y = c(0,1,1,0),
                              x = c(au_values_prec_summarised$min_prec,
@@ -1260,7 +1263,7 @@ global_values_prec %>%
                                          au_values_prec_summarised$max_prec)),
                              aes(x = x, y = y), alpha = 0.3, fill = "red") +
   stat_ecdf(aes(prec), linewidth = 2) + 
-  theme(text=element_text(size=12)) +
+  theme(text=element_text(size=20)) +
   xlim(c(0, 9000)) -> ecdf_prec
 ```
 
@@ -1276,9 +1279,12 @@ Combine to create Figure 1
 ```{r}
 png("output/manuscript/figures/ecdf_whittaker.png", height = 1200, width = 2800, res = 200)
 
-cowplot::plot_grid(whittaker_plot, ecdf_prec, labels = "auto")
-
+p <- cowplot::plot_grid(whittaker_plot, ecdf_prec, labels = "auto")
+library(patchwork)
+p <- whittaker_plot + ecdf_prec
 dev.off()
+
+ggsave("output/manuscript/figures/ecdf_whittaker.png",plot = p, height = 3600, width = 8400, units = "px", dpi = 600)
 ```
 
 Assess correlation between precipitation and temperature (for Intro text)

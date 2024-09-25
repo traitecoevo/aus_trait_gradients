@@ -27,7 +27,7 @@ austraits_climate_space <- function(core_trait){
       guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2))) +
       xlab(expression(Temperature (degree * C))) +
       ylab(" Precipitation (cm/yr)") +
-      theme(text = element_text(size = 12))  +
+      theme(text = element_text(size = 20))  +
       theme(
         legend.justification = c(-0.1, 0),
         legend.position = c(0.005, 0.25),
@@ -65,7 +65,7 @@ austraits_climate_space <- function(core_trait){
   guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2))) +
   xlab(expression(Temperature (degree * C))) +
   ylab(" Precipitation (cm/yr)") +
-  theme(text = element_text(size = 12))  +
+  theme(text = element_text(size = 20))  +
   theme(
     legend.justification = c(-0.1, 0),
     legend.position = "none",
@@ -120,7 +120,7 @@ austraits_climate_space <- function(core_trait){
       guides(colour = guide_legend(override.aes = list(alpha = 1, size = 2))) +
       xlab(expression(Mean~annual~temperature~(degree * C))) +
       ylab("Mean annual precipitation (mm)") +
-      theme(text = element_text(size = 12))  +
+      theme(text = element_text(size = 20))  +
       theme(
         legend.justification = c(-0.1, 0),
         legend.position=c(.005,.5),
